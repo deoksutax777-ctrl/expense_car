@@ -590,6 +590,12 @@ function calcDist() {
     results[maxI][cat] += ctAll[cat] - dist;
   }
 
+  // Store allocation data for download
+  templateData.pool = pool;
+  templateData.direct = direct;
+  templateData.ctAll = ctAll;
+  templateData.totalKmAll = totalKmAll;
+
   renderResults(results, ctAll, pool, direct);
 }
 
@@ -652,6 +658,13 @@ function renderResults(results, ct, pool, direct) {
   document.getElementById("resultSection").scrollIntoView({behavior: "smooth"});
 }
 
+function sc(ws, r, c, v, fmt) {
+  var cell = {v:v};
+  if (typeof v === "number") { cell.t = "n"; cell.z = fmt || "#,##0"; }
+  else { cell.t = "s"; }
+  ws[XLSX.utils.encode_cell({r:r, c:c})] = cell;
+}
+
 function downloadResult() {
   if (!templateData || !templateData.results || !originalTemplateWb) {
     alert("먼저 비용 배분 계산을 실행해주세요.");
@@ -659,9 +672,18 @@ function downloadResult() {
   }
   var wb = XLSX.read(XLSX.write(originalTemplateWb, {type:"array", bookType:"xlsx"}), {type:"array"});
   var ws = wb.Sheets[wb.SheetNames[0]];
+  var results = templateData.results;
+  var vehicles = templateData.vehicles;
+  var pool = templateData.pool;
+  var direct = templateData.direct;
+  var ctAll = templateData.ctAll;
+  var totalKmAll = templateData.totalKmAll;
+  var catNames = ["유류비","보험료","수선비","자동차세","기타비용"];
+  var catKeys = ["fuel","insurance","repair","tax","other"];
 
-  for (var i = 0; i < templateData.results.length; i++) {
-    var r = templateData.results[i];
+  // --- Sheet 1: 템플릿 (기존) ---
+  for (var i = 0; i < results.length; i++) {
+    var r = results[i];
     var row = r.row;
     ws[XLSX.utils.encode_cell({r:row, c:8})] = {t:"n", v:r.fuel, z:"#,##0"};
     ws[XLSX.utils.encode_cell({r:row, c:9})] = {t:"n", v:r.insurance, z:"#,##0"};
@@ -669,11 +691,221 @@ function downloadResult() {
     ws[XLSX.utils.encode_cell({r:row, c:11})] = {t:"n", v:r.tax, z:"#,##0"};
     ws[XLSX.utils.encode_cell({r:row, c:12})] = {t:"n", v:r.other, z:"#,##0"};
   }
-
   var range = XLSX.utils.decode_range(ws["!ref"]);
   if (range.e.c < 12) range.e.c = 12;
   ws["!ref"] = XLSX.utils.encode_range(range);
 
+  // --- Sheet 2: 배분 상세내역 ---
+  var ws2 = {};
+  var R = 0;
+
+  // === Section 1: 비용 총괄 요약 ===
+  sc(ws2, R, 0, "[ 비용 총괄 요약 ]"); R++;
+  sc(ws2, R, 0, ""); sc(ws2, R, 1, "유류비"); sc(ws2, R, 2, "보험료"); sc(ws2, R, 3, "수선비"); sc(ws2, R, 4, "자동차세"); sc(ws2, R, 5, "기타비용"); sc(ws2, R, 6, "합계"); R++;
+  var gt = 0; for (var ci = 0; ci < catKeys.length; ci++) gt += ctAll[catKeys[ci]];
+  sc(ws2, R, 0, "비용 합계");
+  for (var ci = 0; ci < catKeys.length; ci++) sc(ws2, R, ci+1, ctAll[catKeys[ci]]);
+  sc(ws2, R, 6, gt); R++;
+
+  var directTotalByCat = {fuel:0,insurance:0,repair:0,tax:0,other:0};
+  for (var vi = 0; vi < direct.length; vi++) {
+    for (var ci = 0; ci < catKeys.length; ci++) directTotalByCat[catKeys[ci]] += direct[vi][catKeys[ci]];
+  }
+  var directGt = 0; for (var ci = 0; ci < catKeys.length; ci++) directGt += directTotalByCat[catKeys[ci]];
+  sc(ws2, R, 0, "차량번호 직접배분");
+  for (var ci = 0; ci < catKeys.length; ci++) sc(ws2, R, ci+1, directTotalByCat[catKeys[ci]]);
+  sc(ws2, R, 6, directGt); R++;
+
+  var poolGt = 0; for (var ci = 0; ci < catKeys.length; ci++) poolGt += pool[catKeys[ci]];
+  sc(ws2, R, 0, "주행거리 비율배분");
+  for (var ci = 0; ci < catKeys.length; ci++) sc(ws2, R, ci+1, pool[catKeys[ci]]);
+  sc(ws2, R, 6, poolGt); R++;
+  R++;
+
+  // === Section 2: 차량번호 우선배분 내역 ===
+  sc(ws2, R, 0, "[ 차량번호 우선배분 내역 ]"); R++;
+  sc(ws2, R, 0, "No."); sc(ws2, R, 1, "차량번호"); sc(ws2, R, 2, "차종");
+  for (var ci = 0; ci < catNames.length; ci++) sc(ws2, R, ci+3, catNames[ci]);
+  sc(ws2, R, 8, "소계"); R++;
+
+  for (var vi = 0; vi < vehicles.length; vi++) {
+    var v = vehicles[vi]; var d = direct[vi];
+    var dSub = 0;
+    sc(ws2, R, 0, v.no); sc(ws2, R, 1, v.plate || "-"); sc(ws2, R, 2, v.type || "-");
+    for (var ci = 0; ci < catKeys.length; ci++) { sc(ws2, R, ci+3, d[catKeys[ci]]); dSub += d[catKeys[ci]]; }
+    sc(ws2, R, 8, dSub); R++;
+  }
+  // subtotal
+  sc(ws2, R, 0, ""); sc(ws2, R, 1, "합계"); sc(ws2, R, 2, "");
+  for (var ci = 0; ci < catKeys.length; ci++) sc(ws2, R, ci+3, directTotalByCat[catKeys[ci]]);
+  sc(ws2, R, 8, directGt); R++;
+  R++;
+
+  // === Section 3: 주행거리 비율배분 내역 ===
+  sc(ws2, R, 0, "[ 주행거리 비율배분 내역 ]"); R++;
+  sc(ws2, R, 0, "No."); sc(ws2, R, 1, "차량번호"); sc(ws2, R, 2, "차종");
+  sc(ws2, R, 3, "총주행거리"); sc(ws2, R, 4, "배분비율");
+  for (var ci = 0; ci < catNames.length; ci++) sc(ws2, R, ci+5, catNames[ci]);
+  sc(ws2, R, 10, "소계"); R++;
+
+  var ratioTots = {fuel:0,insurance:0,repair:0,tax:0,other:0};
+  for (var vi = 0; vi < vehicles.length; vi++) {
+    var v = vehicles[vi]; var r = results[vi]; var d = direct[vi];
+    var rSub = 0;
+    sc(ws2, R, 0, v.no); sc(ws2, R, 1, v.plate || "-"); sc(ws2, R, 2, v.type || "-");
+    sc(ws2, R, 3, v.totalKm);
+    sc(ws2, R, 4, totalKmAll > 0 ? v.totalKm / totalKmAll : 0, "0.0000%");
+    for (var ci = 0; ci < catKeys.length; ci++) {
+      var ratioAmt = r[catKeys[ci]] - d[catKeys[ci]];
+      sc(ws2, R, ci+5, ratioAmt);
+      rSub += ratioAmt;
+      ratioTots[catKeys[ci]] += ratioAmt;
+    }
+    sc(ws2, R, 10, rSub); R++;
+  }
+  var ratioGt = 0; for (var ci = 0; ci < catKeys.length; ci++) ratioGt += ratioTots[catKeys[ci]];
+  sc(ws2, R, 0, ""); sc(ws2, R, 1, "합계"); sc(ws2, R, 2, "");
+  sc(ws2, R, 3, totalKmAll); sc(ws2, R, 4, 1, "0.0000%");
+  for (var ci = 0; ci < catKeys.length; ci++) sc(ws2, R, ci+5, ratioTots[catKeys[ci]]);
+  sc(ws2, R, 10, ratioGt); R++;
+  R++;
+
+  // === Section 4: 최종 배분 결과 (합산) ===
+  sc(ws2, R, 0, "[ 최종 배분 결과 (직접배분 + 비율배분) ]"); R++;
+  sc(ws2, R, 0, "No."); sc(ws2, R, 1, "차량번호"); sc(ws2, R, 2, "차종");
+  sc(ws2, R, 3, "총주행거리"); sc(ws2, R, 4, "배분비율");
+  for (var ci = 0; ci < catNames.length; ci++) sc(ws2, R, ci+5, catNames[ci]);
+  sc(ws2, R, 10, "소계"); R++;
+
+  var finalTots = {fuel:0,insurance:0,repair:0,tax:0,other:0,sub:0};
+  for (var vi = 0; vi < results.length; vi++) {
+    var r = results[vi];
+    var sub = r.fuel + r.insurance + r.repair + r.tax + r.other;
+    sc(ws2, R, 0, r.no); sc(ws2, R, 1, r.plate || "-"); sc(ws2, R, 2, r.type || "-");
+    sc(ws2, R, 3, r.totalKm);
+    sc(ws2, R, 4, r.distRatio, "0.0000%");
+    for (var ci = 0; ci < catKeys.length; ci++) { sc(ws2, R, ci+5, r[catKeys[ci]]); finalTots[catKeys[ci]] += r[catKeys[ci]]; }
+    sc(ws2, R, 10, sub); finalTots.sub += sub; R++;
+  }
+  sc(ws2, R, 0, ""); sc(ws2, R, 1, "합계"); sc(ws2, R, 2, "");
+  sc(ws2, R, 3, totalKmAll); sc(ws2, R, 4, 1, "0.0000%");
+  for (var ci = 0; ci < catKeys.length; ci++) sc(ws2, R, ci+5, finalTots[catKeys[ci]]);
+  sc(ws2, R, 10, finalTots.sub); R++;
+  R++;
+
+  // === Section 5: 차량번호 매칭 거래 목록 ===
+  sc(ws2, R, 0, "[ 차량번호 매칭 거래 목록 ]"); R++;
+  sc(ws2, R, 0, "날짜"); sc(ws2, R, 1, "적요"); sc(ws2, R, 2, "거래처");
+  sc(ws2, R, 3, "금액"); sc(ws2, R, 4, "분류"); sc(ws2, R, 5, "매칭 차량번호"); R++;
+
+  for (var i = 0; i < ledgerData.entries.length; i++) {
+    var en = ledgerData.entries[i];
+    if (en.matchedVehicle !== null && en.matchedVehicle !== undefined && en.category !== "skip") {
+      var mv = vehicles[en.matchedVehicle];
+      sc(ws2, R, 0, en.date); sc(ws2, R, 1, en.desc); sc(ws2, R, 2, en.vendor);
+      sc(ws2, R, 3, en.amount); sc(ws2, R, 4, CATS[en.category] ? CATS[en.category].name : en.category);
+      sc(ws2, R, 5, mv.plate || mv.no); R++;
+    }
+  }
+  R++;
+
+  ws2["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:R, c:10}});
+  ws2["!cols"] = [{wch:8},{wch:14},{wch:10},{wch:14},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws2, "배분 상세내역");
+
+  // --- Sheet 3: 산출식 정리 ---
+  var ws3 = {};
+  var R3 = 0;
+
+  sc(ws3, R3, 0, "[ 업무용승용차 비용배분 산출식 정리 ]"); R3++;
+  R3++;
+
+  sc(ws3, R3, 0, "1. 배분 방법론"); R3++;
+  sc(ws3, R3, 0, "  본 비용배분은 2단계 배분법을 적용합니다."); R3++;
+  sc(ws3, R3, 0, "  1단계: 거래처원장의 적요/거래처에 차량번호가 포함된 비용을 해당 차량에 직접 배분"); R3++;
+  sc(ws3, R3, 0, "  2단계: 차량번호가 특정되지 않는 나머지 비용을 총주행거리 비율로 안분 배분"); R3++;
+  R3++;
+
+  sc(ws3, R3, 0, "2. 산출식"); R3++;
+  sc(ws3, R3, 0, "  [직접배분]  해당 차량 배분액 = 차량번호 매칭된 거래 금액의 합계"); R3++;
+  sc(ws3, R3, 0, "  [비율배분]  차량별 배분액 = 비율배분 대상 금액 x (해당 차량 총주행거리 / 전체 총주행거리 합계)"); R3++;
+  sc(ws3, R3, 0, "  [최종배분]  차량별 최종 금액 = 직접배분액 + 비율배분액"); R3++;
+  R3++;
+
+  sc(ws3, R3, 0, "3. 기초 데이터"); R3++;
+  sc(ws3, R3, 0, "  전체 총주행거리 합계"); sc(ws3, R3, 1, totalKmAll); sc(ws3, R3, 2, "km"); R3++;
+  sc(ws3, R3, 0, "  등록 차량 수"); sc(ws3, R3, 1, vehicles.length); sc(ws3, R3, 2, "대"); R3++;
+  sc(ws3, R3, 0, "  전체 비용 합계"); sc(ws3, R3, 1, gt); sc(ws3, R3, 2, "원"); R3++;
+  sc(ws3, R3, 0, "  차량번호 직접배분 합계"); sc(ws3, R3, 1, directGt); sc(ws3, R3, 2, "원"); R3++;
+  sc(ws3, R3, 0, "  주행거리 비율배분 합계"); sc(ws3, R3, 1, poolGt); sc(ws3, R3, 2, "원"); R3++;
+  R3++;
+
+  // 비율배분 대상 금액
+  sc(ws3, R3, 0, "4. 비율배분 대상 금액 (계정별)"); R3++;
+  sc(ws3, R3, 0, "  계정과목"); sc(ws3, R3, 1, "전체 금액"); sc(ws3, R3, 2, "직접배분"); sc(ws3, R3, 3, "비율배분 대상"); R3++;
+  for (var ci = 0; ci < catKeys.length; ci++) {
+    sc(ws3, R3, 0, "  " + catNames[ci]);
+    sc(ws3, R3, 1, ctAll[catKeys[ci]]);
+    sc(ws3, R3, 2, directTotalByCat[catKeys[ci]]);
+    sc(ws3, R3, 3, pool[catKeys[ci]]); R3++;
+  }
+  sc(ws3, R3, 0, "  합계"); sc(ws3, R3, 1, gt); sc(ws3, R3, 2, directGt); sc(ws3, R3, 3, poolGt); R3++;
+  R3++;
+
+  // 차량별 산출 내역
+  sc(ws3, R3, 0, "5. 차량별 산출 내역"); R3++;
+  for (var vi = 0; vi < vehicles.length; vi++) {
+    var v = vehicles[vi]; var r = results[vi]; var d = direct[vi];
+    var dr = totalKmAll > 0 ? v.totalKm / totalKmAll : 0;
+    sc(ws3, R3, 0, ""); R3++;
+    sc(ws3, R3, 0, "  ■ " + (v.plate || v.no) + (v.type ? " (" + v.type + ")" : "")); R3++;
+    sc(ws3, R3, 0, "    총주행거리"); sc(ws3, R3, 1, v.totalKm); sc(ws3, R3, 2, "km");
+    sc(ws3, R3, 3, "배분비율"); sc(ws3, R3, 4, dr, "0.0000%"); R3++;
+    sc(ws3, R3, 0, "    산출식: 비율배분액 = 비율배분 대상 금액 × " + (dr * 100).toFixed(4) + "%"); R3++;
+    R3++;
+    sc(ws3, R3, 0, "    계정과목"); sc(ws3, R3, 1, "직접배분"); sc(ws3, R3, 2, "비율배분"); sc(ws3, R3, 3, "합계"); sc(ws3, R3, 4, "산출 근거"); R3++;
+    for (var ci = 0; ci < catKeys.length; ci++) {
+      var dAmt = d[catKeys[ci]];
+      var rAmt = r[catKeys[ci]] - dAmt;
+      sc(ws3, R3, 0, "    " + catNames[ci]);
+      sc(ws3, R3, 1, dAmt);
+      sc(ws3, R3, 2, rAmt);
+      sc(ws3, R3, 3, r[catKeys[ci]]);
+      if (dAmt > 0 && rAmt > 0) {
+        sc(ws3, R3, 4, "직접 " + dAmt.toLocaleString() + " + " + pool[catKeys[ci]].toLocaleString() + " × " + (dr*100).toFixed(4) + "% = " + rAmt.toLocaleString());
+      } else if (dAmt > 0) {
+        sc(ws3, R3, 4, "차량번호 매칭 직접배분");
+      } else if (rAmt !== 0) {
+        sc(ws3, R3, 4, pool[catKeys[ci]].toLocaleString() + " × " + (dr*100).toFixed(4) + "% = " + rAmt.toLocaleString());
+      } else {
+        sc(ws3, R3, 4, "-");
+      }
+      R3++;
+    }
+    var sub = r.fuel + r.insurance + r.repair + r.tax + r.other;
+    var dSub = d.fuel + d.insurance + d.repair + d.tax + d.other;
+    sc(ws3, R3, 0, "    소계"); sc(ws3, R3, 1, dSub); sc(ws3, R3, 2, sub - dSub); sc(ws3, R3, 3, sub); R3++;
+  }
+  R3++;
+
+  sc(ws3, R3, 0, "6. 단수 조정"); R3++;
+  sc(ws3, R3, 0, "  비율배분 시 원단위 반올림(ROUND)으로 발생하는 단수 차이는"); R3++;
+  sc(ws3, R3, 0, "  총주행거리가 가장 큰 차량에 가감하여 조정합니다."); R3++;
+  R3++;
+
+  sc(ws3, R3, 0, "7. 비용 분류 기준"); R3++;
+  sc(ws3, R3, 0, "  유류비: 주유, 석유, 에너지, 충전소, LPG, 오일뱅크, 칼텍스 등"); R3++;
+  sc(ws3, R3, 0, "  보험료: 보험, 자동차보험, 화재보험, 책임보험"); R3++;
+  sc(ws3, R3, 0, "  수선비: 정비, 타이어, 세차, 수리, 엔진오일, 브레이크, 배터리 등"); R3++;
+  sc(ws3, R3, 0, "  자동차세: 자동차세, 환경개선부담금"); R3++;
+  sc(ws3, R3, 0, "  기타비용: 통행료, 주차, 하이패스, 대리운전, 리스, 렌트 등"); R3++;
+  sc(ws3, R3, 0, "  제외: 4대보험, 재산세, 부가세 등 차량과 무관한 비용"); R3++;
+
+  ws3["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:R3, c:5}});
+  ws3["!cols"] = [{wch:40},{wch:16},{wch:16},{wch:16},{wch:16},{wch:50}];
+  XLSX.utils.book_append_sheet(wb, ws3, "산출식 정리");
+
+  // --- Download ---
   var wbOut = XLSX.write(wb, {bookType:"xlsx", type:"array"});
   var blob = new Blob([wbOut], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
   var url = URL.createObjectURL(blob);
