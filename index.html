@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>업무용승용차 비용배분 프로그램</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --primary: #2563eb; --primary-light: #dbeafe;
+    --success: #16a34a; --success-light: #dcfce7;
+    --warning: #d97706; --warning-light: #fef3c7;
+    --danger: #dc2626; --danger-light: #fee2e2;
+    --gray-50: #f9fafb; --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb; --gray-300: #d1d5db;
+    --gray-500: #6b7280; --gray-700: #374151;
+    --gray-900: #111827; --border-radius: 8px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Segoe UI","Malgun Gothic",sans-serif; background:var(--gray-50); color:var(--gray-900); line-height:1.6; }
+  .container { max-width:1400px; margin:0 auto; padding:20px; }
+  header { background:linear-gradient(135deg,#1e40af,#3b82f6); color:white; padding:24px 32px; border-radius:var(--border-radius); margin-bottom:24px; box-shadow:0 4px 12px rgba(37,99,235,0.3); }
+  header h1 { font-size:24px; font-weight:700; }
+  header p { font-size:14px; opacity:0.85; margin-top:4px; }
+  .card { background:white; border-radius:var(--border-radius); padding:24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); border:1px solid var(--gray-200); }
+  .card h2 { font-size:18px; font-weight:600; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .card h2 .step { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:var(--primary); color:white; border-radius:50%; font-size:14px; font-weight:700; }
+  .upload-area { display:flex; gap:20px; flex-wrap:wrap; }
+  .upload-box { flex:1; min-width:280px; border:2px dashed var(--gray-300); border-radius:var(--border-radius); padding:32px 20px; text-align:center; cursor:pointer; transition:all 0.2s; position:relative; }
+  .upload-box:hover { border-color:var(--primary); background:var(--primary-light); }
+  .upload-box.loaded { border-color:var(--success); background:var(--success-light); border-style:solid; }
+  .upload-box input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; }
+  .upload-box .icon { font-size:36px; margin-bottom:8px; }
+  .upload-box .label { font-weight:600; font-size:15px; }
+  .upload-box .desc { font-size:13px; color:var(--gray-500); margin-top:4px; }
+  .upload-box .filename { font-size:13px; color:var(--success); margin-top:8px; font-weight:600; }
+  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:16px; }
+  .summary-item { background:var(--gray-50); border:1px solid var(--gray-200); border-radius:6px; padding:14px; text-align:center; }
+  .summary-item .value { font-size:20px; font-weight:700; color:var(--primary); }
+  .summary-item .lbl { font-size:13px; color:var(--gray-500); margin-top:2px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { background:var(--gray-100); font-weight:600; text-align:center; padding:10px 8px; border:1px solid var(--gray-200); white-space:nowrap; position:sticky; top:0; z-index:1; }
+  td { padding:8px; border:1px solid var(--gray-200); text-align:center; }
+  td.tl { text-align:left; } td.tr { text-align:right; }
+  .num { font-variant-numeric:tabular-nums; }
+  .tw { max-height:500px; overflow:auto; border:1px solid var(--gray-200); border-radius:6px; }
+  .cs { padding:4px 8px; border:1px solid var(--gray-300); border-radius:4px; font-size:12px; background:white; min-width:80px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+  .bf { background:#dbeafe; color:#1d4ed8; }
+  .bi { background:#fce7f3; color:#be185d; }
+  .br { background:#fef3c7; color:#b45309; }
+  .bt { background:#dcfce7; color:#15803d; }
+  .bo { background:#f3e8ff; color:#7c3aed; }
+  .bs { background:var(--gray-200); color:var(--gray-500); }
+  .btn { padding:10px 24px; border:none; border-radius:6px; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:6px; }
+  .btn-primary { background:var(--primary); color:white; }
+  .btn-primary:hover { background:#1d4ed8; }
+  .btn-primary:disabled { background:var(--gray-300); cursor:not-allowed; }
+  .btn-success { background:var(--success); color:white; }
+  .btn-success:hover { background:#15803d; }
+  .btn-group { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
+  .hl-row { background:#fffbeb !important; }
+  .tab-buttons { display:flex; gap:4px; margin-bottom:12px; border-bottom:2px solid var(--gray-200); padding-bottom:0; flex-wrap:wrap; }
+  .tab-btn { padding:8px 16px; border:none; background:none; font-size:13px; font-weight:600; cursor:pointer; color:var(--gray-500); border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.2s; }
+  .tab-btn.active { color:var(--primary); border-bottom-color:var(--primary); }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+  .filter-bar { display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap; }
+  .filter-bar input { padding:6px 12px; border:1px solid var(--gray-300); border-radius:4px; font-size:13px; min-width:200px; }
+  .filter-bar select { padding:6px 12px; border:1px solid var(--gray-300); border-radius:4px; font-size:13px; }
+  .info-box { background:var(--primary-light); border:1px solid #93c5fd; border-radius:6px; padding:12px 16px; font-size:13px; margin-bottom:16px; }
+  .result-hl { background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:2px solid var(--success); }
+  @media(max-width:768px) { .container{padding:12px;} .upload-area{flex-direction:column;} .summary-grid{grid-template-columns:repeat(2,1fr);} table{font-size:11px;} td,th{padding:4px;} }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>업무용승용차 비용배분 프로그램</h1>
+    <p>거래처원장의 차량관련 비용을 총주행거리 비율로 각 차량에 배분합니다</p>
+  </header>
+
+  <div class="card">
+    <h2><span class="step">1</span> 파일 업로드</h2>
+    <div class="upload-area">
+      <div class="upload-box" id="templateBox">
+        <input type="file" id="templateFile" accept=".xlsx,.xls" onchange="loadTemplate(this)">
+        <div class="icon">&#128203;</div>
+        <div class="label">업무용승용차 비용 템플릿</div>
+        <div class="desc">D~H열이 입력된 템플릿 파일 (.xlsx)</div>
+        <div class="filename" id="templateName"></div>
+      </div>
+      <div class="upload-box" id="ledgerBox">
+        <input type="file" id="ledgerFile" accept=".xlsx,.xls" onchange="loadLedger(this)">
+        <div class="icon">&#128210;</div>
+        <div class="label">거래처원장</div>
+        <div class="desc">차량관련 비용이 기록된 원장 파일 (.xls, .xlsx)</div>
+        <div class="filename" id="ledgerName"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="vehicleSection" style="display:none">
+    <h2><span class="step">2</span> 차량 정보 확인</h2>
+    <div class="summary-grid" id="vehicleSummary"></div>
+    <div class="tw"><table id="vehicleTable"></table></div>
+  </div>
+
+  <div class="card" id="ledgerSection" style="display:none">
+    <h2><span class="step">3</span> 거래처원장 비용 분류</h2>
+    <div class="info-box">
+      거래처원장의 각 거래를 비용 항목(유류비/보험료/수선비/자동차세/기타비용)으로 자동 분류합니다.<br>
+      분류가 맞지 않는 항목은 드롭다운에서 직접 변경하세요. <strong>"제외"</strong>로 설정하면 배분 대상에서 빠집니다.
+    </div>
+    <div class="tab-buttons" id="sheetTabs"></div>
+    <div id="sheetContents"></div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="calcDist()">비용 배분 계산</button>
+    </div>
+  </div>
+
+  <div class="card result-hl" id="resultSection" style="display:none">
+    <h2><span class="step">4</span> 배분 결과</h2>
+    <div class="summary-grid" id="resultSummary"></div>
+    <div class="tw"><table id="resultTable"></table></div>
+    <div class="btn-group">
+      <button class="btn btn-success" onclick="downloadResult()">결과 엑셀 다운로드</button>
+      <button class="btn btn-primary" onclick="calcDist()">다시 계산</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var templateData = null;
+var ledgerData = null;
+var originalTemplateWb = null;
+
+var CATS = {
+  fuel:      {name:"유류비",   bc:"bf", col:"I"},
+  insurance: {name:"보험료",   bc:"bi", col:"J"},
+  repair:    {name:"수선비",   bc:"br", col:"K"},
+  tax:       {name:"자동차세", bc:"bt", col:"L"},
+  other:     {name:"기타비용", bc:"bo", col:"M"},
+  skip:      {name:"제외",     bc:"bs", col:null}
+};
+
+var FUEL_KW = ["주유","석유","에너지","충전소","충전주","LPG","lpg","가스충전","셀프주유","오일뱅크","칼텍스","GS칼텍스","현대오일","주유소","연료"];
+var INS_KW = ["보험","화재보험","자동차보험","책임보험"];
+var REP_KW = ["정비","타이어","세차","오토","수리","공업사","수선","엔진오일","교환","점검","오일교환","멀케닉","갤러리","베이","랠리","필터","브레이크","배터리","워셔","광택","판금","도장","현대자동차정비"];
+var TAX_KW = ["자동차세"];
+var OTH_KW = ["통행료","주차","톨게이트","하이패스","고속도로","도로공사","터널","교통","대리운전","견인","배송","퀵서비스","대한통운","택배"];
+var SKIP_KW = ["국민연금","건강보험","고용보험","산재보험","재산세","주민세","등록면허세","부가세","종합소득세","법인세","원천세","4대보험","숙소","기숙사","임직원숙소","복합기","복합기임대","사무실"];
+
+function catEntry(desc, vendor, sheet) {
+  var c = (desc || "") + " " + (vendor || "");
+  var i;
+  for (i = 0; i < SKIP_KW.length; i++) { if (c.indexOf(SKIP_KW[i]) >= 0) return "skip"; }
+  for (i = 0; i < TAX_KW.length; i++) { if (c.indexOf(TAX_KW[i]) >= 0) return "tax"; }
+  for (i = 0; i < INS_KW.length; i++) { if (c.indexOf(INS_KW[i]) >= 0) return "insurance"; }
+  for (i = 0; i < REP_KW.length; i++) { if (c.indexOf(REP_KW[i]) >= 0) return "repair"; }
+  for (i = 0; i < FUEL_KW.length; i++) { if (c.indexOf(FUEL_KW[i]) >= 0) return "fuel"; }
+  for (i = 0; i < OTH_KW.length; i++) { if (c.indexOf(OTH_KW[i]) >= 0) return "other"; }
+
+  if (sheet && sheet.indexOf("차량유지비") >= 0) {
+    if (/주유|석유|에너지/.test(c)) return "fuel";
+    return "other";
+  }
+  if (sheet && sheet.indexOf("세금과공과금") >= 0) {
+    if (/\d{2,3}[가-힣]\d{4}/.test(desc || "")) return "tax";
+    if (c.indexOf("캐피탈") >= 0 && /\d{2,3}[가-힣]\d{4}/.test(desc || "")) return "tax";
+    if (c.indexOf("환경개선부담금") >= 0) return "tax";
+    return "skip";
+  }
+  if (sheet && sheet.indexOf("임차료") >= 0) {
+    if (c.indexOf("리스") >= 0 || c.indexOf("렌트") >= 0 || c.indexOf("렌탈") >= 0) return "other";
+    return "skip";
+  }
+  return "other";
+}
+
+function loadTemplate(inp) {
+  var file = inp.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var wb = XLSX.read(data, {type: "array"});
+      originalTemplateWb = XLSX.read(data, {type: "array"});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var range = XLSX.utils.decode_range(ws["!ref"]);
+      var vehicles = [];
+      for (var r = 3; r <= range.e.r; r++) {
+        var noC = ws[XLSX.utils.encode_cell({r:r, c:2})];
+        var no = noC ? noC.v : null;
+        if (no === null || no === undefined || no === "") continue;
+        if (typeof no === "string" && no.trim() === "") continue;
+
+        var plateC = ws[XLSX.utils.encode_cell({r:r, c:3})];
+        var typeC = ws[XLSX.utils.encode_cell({r:r, c:4})];
+        var totalKmC = ws[XLSX.utils.encode_cell({r:r, c:5})];
+        var bizKmC = ws[XLSX.utils.encode_cell({r:r, c:6})];
+        var ratioC = ws[XLSX.utils.encode_cell({r:r, c:7})];
+
+        var totalKm = totalKmC ? (typeof totalKmC.v === "number" ? totalKmC.v : parseFloat(totalKmC.v) || 0) : 0;
+        var bizKm = bizKmC ? (typeof bizKmC.v === "number" ? bizKmC.v : parseFloat(bizKmC.v) || 0) : 0;
+        var ratio = 0;
+        if (ratioC) {
+          if (typeof ratioC.v === "number") ratio = ratioC.v;
+          else ratio = totalKm > 0 ? bizKm / totalKm : 0;
+        } else {
+          ratio = totalKm > 0 ? bizKm / totalKm : 0;
+        }
+        vehicles.push({no:no, plate:plateC?plateC.v:"", type:typeC?typeC.v:"", totalKm:totalKm, bizKm:bizKm, ratio:ratio, row:r});
+      }
+      templateData = {vehicles: vehicles, wb: wb};
+      document.getElementById("templateBox").classList.add("loaded");
+      document.getElementById("templateName").textContent = file.name + " (" + vehicles.length + "대)";
+      renderVehicles();
+      checkReady();
+    } catch(err) { alert("템플릿 파일 읽기 오류: " + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function loadLedger(inp) {
+  var file = inp.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var wb = XLSX.read(data, {type: "array"});
+      var sheets = [];
+      var allEntries = [];
+      var eid = 0;
+
+      for (var si = 0; si < wb.SheetNames.length; si++) {
+        var sn = wb.SheetNames[si];
+        var ws = wb.Sheets[sn];
+        if (!ws["!ref"]) continue;
+        var range = XLSX.utils.decode_range(ws["!ref"]);
+        var entries = [];
+
+        for (var r = 4; r <= range.e.r; r++) {
+          var dateC = ws[XLSX.utils.encode_cell({r:r, c:0})];
+          var descC = ws[XLSX.utils.encode_cell({r:r, c:1})];
+          var codeC = ws[XLSX.utils.encode_cell({r:r, c:2})];
+          var vendC = ws[XLSX.utils.encode_cell({r:r, c:3})];
+          var debC = ws[XLSX.utils.encode_cell({r:r, c:4})];
+          var credC = ws[XLSX.utils.encode_cell({r:r, c:5})];
+
+          var desc = descC ? String(descC.v || "").trim() : "";
+          var deb = debC ? (typeof debC.v === "number" ? debC.v : parseFloat(debC.v) || 0) : 0;
+          var cred = credC ? (typeof credC.v === "number" ? credC.v : parseFloat(credC.v) || 0) : 0;
+
+          if (!desc || desc.indexOf("[ 월") >= 0 || desc.indexOf("[ 누") >= 0 || desc.indexOf("손익계정") >= 0) continue;
+          if (deb === 0 && cred === 0) continue;
+
+          var vendor = vendC ? String(vendC.v || "").trim() : "";
+          var date = dateC ? String(dateC.v || "").trim() : "";
+          var category = catEntry(desc, vendor, sn);
+
+          var entry = {id:eid++, date:date, desc:desc, code:codeC?String(codeC.v||""):"", vendor:vendor, debit:deb, credit:cred, amount:deb-cred, sheet:sn, category:category};
+          entries.push(entry);
+          allEntries.push(entry);
+        }
+        sheets.push({name: sn, entries: entries});
+      }
+      ledgerData = {sheets: sheets, entries: allEntries};
+      document.getElementById("ledgerBox").classList.add("loaded");
+      document.getElementById("ledgerName").textContent = file.name + " (" + wb.SheetNames.length + "시트, " + allEntries.length + "건)";
+      renderLedger();
+      checkReady();
+    } catch(err) { alert("거래처원장 파일 읽기 오류: " + err.message); console.error(err); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderVehicles() {
+  if (!templateData) return;
+  var vehicles = templateData.vehicles;
+  var totalKmAll = 0;
+  for (var i = 0; i < vehicles.length; i++) totalKmAll += vehicles[i].totalKm;
+  document.getElementById("vehicleSection").style.display = "";
+
+  document.getElementById("vehicleSummary").innerHTML =
+    '<div class="summary-item"><div class="value">' + vehicles.length + '대</div><div class="lbl">차량 수</div></div>' +
+    '<div class="summary-item"><div class="value">' + totalKmAll.toLocaleString() + ' km</div><div class="lbl">전체 총주행거리 합계</div></div>';
+
+  var h = '<thead><tr><th>No.</th><th>차량번호</th><th>차종</th><th>총주행거리</th><th>업무용사용거리</th><th>업무운행비율</th><th>배분비율<br>(총주행거리/합계)</th></tr></thead><tbody>';
+  var totalBizKm = 0;
+  for (var i = 0; i < vehicles.length; i++) {
+    var v = vehicles[i];
+    var dr = totalKmAll > 0 ? v.totalKm / totalKmAll : 0;
+    totalBizKm += v.bizKm;
+    h += '<tr><td>' + v.no + '</td><td>' + (v.plate || "-") + '</td><td>' + (v.type || "-") + '</td>' +
+      '<td class="tr num">' + v.totalKm.toLocaleString() + '</td>' +
+      '<td class="tr num">' + v.bizKm.toLocaleString() + '</td>' +
+      '<td class="num">' + (v.ratio * 100).toFixed(2) + '%</td>' +
+      '<td class="num" style="font-weight:600;color:var(--primary)">' + (dr * 100).toFixed(4) + '%</td></tr>';
+  }
+  h += '<tr style="font-weight:700;background:var(--gray-100)"><td colspan="3">합계</td>' +
+    '<td class="tr num">' + totalKmAll.toLocaleString() + '</td>' +
+    '<td class="tr num">' + totalBizKm.toLocaleString() + '</td><td>-</td><td class="num">100%</td></tr></tbody>';
+  document.getElementById("vehicleTable").innerHTML = h;
+}
+
+function renderLedger() {
+  if (!ledgerData) return;
+  document.getElementById("ledgerSection").style.display = "";
+  var tabH = "";
+  var contH = "";
+
+  for (var i = 0; i < ledgerData.sheets.length; i++) {
+    var sh = ledgerData.sheets[i];
+    var ac = i === 0 ? "active" : "";
+    tabH += '<button class="tab-btn ' + ac + '" onclick="switchTab(' + i + ')" data-tab="' + i + '">' + sh.name + ' (' + sh.entries.length + '건)</button>';
+    contH += '<div class="tab-content ' + ac + '" id="tab-' + i + '">' + renderSheet(sh, i) + '</div>';
+  }
+  tabH += '<button class="tab-btn" onclick="switchTab(\'summary\')" data-tab="summary">분류 요약</button>';
+  contH += '<div class="tab-content" id="tab-summary"><div id="catSummary"></div></div>';
+
+  document.getElementById("sheetTabs").innerHTML = tabH;
+  document.getElementById("sheetContents").innerHTML = contH;
+  updateCatSummary();
+}
+
+function renderSheet(sh, si) {
+  var opts = "";
+  var keys = Object.keys(CATS);
+  for (var ki = 0; ki < keys.length; ki++) {
+    opts += '<option value="' + keys[ki] + '">' + CATS[keys[ki]].name + '</option>';
+  }
+
+  var h = '<div class="filter-bar">' +
+    '<input type="text" placeholder="검색 (적요, 거래처...)" oninput="filterSh(' + si + ',this.value)">' +
+    '<select onchange="bulkCat(' + si + ',this.value)"><option value="">일괄 변경...</option>' + opts + '</select>' +
+    '<label style="font-size:13px;display:flex;align-items:center;gap:4px;"><input type="checkbox" onchange="toggleSkip(' + si + ',this.checked)"> 제외 항목 숨기기</label>' +
+    '</div><div class="tw"><table id="st-' + si + '"><thead><tr>' +
+    '<th style="width:40px"><input type="checkbox" onchange="toggleAll(' + si + ',this.checked)"></th>' +
+    '<th>날짜</th><th>적요</th><th>거래처</th><th>차변(금액)</th><th>대변</th><th>분류</th></tr></thead><tbody>';
+
+  for (var ei = 0; ei < sh.entries.length; ei++) {
+    var en = sh.entries[ei];
+    var selOpts = "";
+    for (var ki = 0; ki < keys.length; ki++) {
+      var sel = keys[ki] === en.category ? " selected" : "";
+      selOpts += '<option value="' + keys[ki] + '"' + sel + '>' + CATS[keys[ki]].name + '</option>';
+    }
+    h += '<tr data-id="' + en.id + '" class="' + (en.category === "skip" ? "hl-row" : "") + '">' +
+      '<td><input type="checkbox" data-eid="' + en.id + '"></td>' +
+      '<td>' + en.date + '</td><td class="tl">' + en.desc + '</td><td class="tl">' + en.vendor + '</td>' +
+      '<td class="tr num">' + (en.debit ? en.debit.toLocaleString() : "") + '</td>' +
+      '<td class="tr num">' + (en.credit ? en.credit.toLocaleString() : "") + '</td>' +
+      '<td><select class="cs" data-eid="' + en.id + '" onchange="chgCat(' + en.id + ',this.value)">' + selOpts + '</select></td></tr>';
+  }
+  h += '</tbody></table></div>';
+  return h;
+}
+
+function switchTab(idx) {
+  var tabs = document.querySelectorAll(".tab-btn");
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove("active");
+  var conts = document.querySelectorAll(".tab-content");
+  for (var i = 0; i < conts.length; i++) conts[i].classList.remove("active");
+  document.querySelector('[data-tab="' + idx + '"]').classList.add("active");
+  document.getElementById("tab-" + idx).classList.add("active");
+  if (idx === "summary") updateCatSummary();
+}
+
+function chgCat(eid, nc) {
+  for (var i = 0; i < ledgerData.entries.length; i++) {
+    if (ledgerData.entries[i].id === eid) {
+      ledgerData.entries[i].category = nc;
+      break;
+    }
+  }
+  // Also update in sheets
+  for (var si = 0; si < ledgerData.sheets.length; si++) {
+    for (var ei = 0; ei < ledgerData.sheets[si].entries.length; ei++) {
+      if (ledgerData.sheets[si].entries[ei].id === eid) {
+        ledgerData.sheets[si].entries[ei].category = nc;
+      }
+    }
+  }
+  var row = document.querySelector('tr[data-id="' + eid + '"]');
+  if (row) row.className = nc === "skip" ? "hl-row" : "";
+  updateCatSummary();
+}
+
+function toggleAll(si, ch) {
+  var cbs = document.querySelectorAll("#st-" + si + " tbody input[type='checkbox']");
+  for (var i = 0; i < cbs.length; i++) {
+    if (cbs[i].closest("tr").style.display !== "none") cbs[i].checked = ch;
+  }
+}
+
+function bulkCat(si, nc) {
+  if (!nc) return;
+  var cbs = document.querySelectorAll("#st-" + si + " tbody input[type='checkbox']:checked");
+  for (var i = 0; i < cbs.length; i++) {
+    var eid = parseInt(cbs[i].getAttribute("data-eid"));
+    chgCat(eid, nc);
+    var sel = document.querySelector('select[data-eid="' + eid + '"]');
+    if (sel) sel.value = nc;
+    cbs[i].checked = false;
+  }
+  var bulkSel = document.querySelector("#tab-" + si + " .filter-bar select");
+  if (bulkSel) bulkSel.value = "";
+  updateCatSummary();
+}
+
+function filterSh(si, kw) {
+  var k = kw.toLowerCase();
+  var rows = document.querySelectorAll("#st-" + si + " tbody tr");
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].style.display = rows[i].textContent.toLowerCase().indexOf(k) >= 0 ? "" : "none";
+  }
+}
+
+function toggleSkip(si, hide) {
+  var rows = document.querySelectorAll("#st-" + si + " tbody tr");
+  for (var i = 0; i < rows.length; i++) {
+    var eid = parseInt(rows[i].getAttribute("data-id"));
+    for (var j = 0; j < ledgerData.entries.length; j++) {
+      if (ledgerData.entries[j].id === eid && ledgerData.entries[j].category === "skip") {
+        rows[i].style.display = hide ? "none" : "";
+      }
+    }
+  }
+}
+
+function updateCatSummary() {
+  if (!ledgerData) return;
+  var sm = {};
+  var keys = Object.keys(CATS);
+  for (var ki = 0; ki < keys.length; ki++) {
+    sm[keys[ki]] = {name: CATS[keys[ki]].name, bc: CATS[keys[ki]].bc, count: 0, total: 0};
+  }
+  for (var i = 0; i < ledgerData.entries.length; i++) {
+    var cat = ledgerData.entries[i].category || "other";
+    if (sm[cat]) { sm[cat].count++; sm[cat].total += ledgerData.entries[i].amount; }
+  }
+  var h = '<div class="summary-grid">';
+  for (var ki = 0; ki < keys.length; ki++) {
+    var d = sm[keys[ki]];
+    h += '<div class="summary-item"><div class="value" style="font-size:18px">' + d.total.toLocaleString() + '원</div><div class="lbl"><span class="badge ' + d.bc + '">' + d.name + '</span> ' + d.count + '건</div></div>';
+  }
+  h += '</div>';
+  var el = document.getElementById("catSummary");
+  if (el) el.innerHTML = h;
+}
+
+function checkReady() {
+  if (templateData && ledgerData) {
+    document.getElementById("ledgerSection").style.display = "";
+  }
+}
+
+function calcDist() {
+  if (!templateData || !ledgerData) { alert("템플릿과 거래처원장 파일을 모두 업로드해주세요."); return; }
+  var vehicles = templateData.vehicles;
+  var totalKmAll = 0;
+  for (var i = 0; i < vehicles.length; i++) totalKmAll += vehicles[i].totalKm;
+  if (totalKmAll === 0) { alert("총주행거리 합계가 0입니다."); return; }
+
+  var ct = {fuel:0, insurance:0, repair:0, tax:0, other:0};
+  for (var i = 0; i < ledgerData.entries.length; i++) {
+    var en = ledgerData.entries[i];
+    if (en.category !== "skip" && ct.hasOwnProperty(en.category)) {
+      ct[en.category] += en.amount;
+    }
+  }
+
+  var results = [];
+  for (var i = 0; i < vehicles.length; i++) {
+    var v = vehicles[i];
+    var dr = v.totalKm / totalKmAll;
+    results.push({
+      no: v.no, plate: v.plate, type: v.type, totalKm: v.totalKm,
+      bizKm: v.bizKm, ratio: v.ratio, row: v.row, distRatio: dr,
+      fuel: Math.round(ct.fuel * dr),
+      insurance: Math.round(ct.insurance * dr),
+      repair: Math.round(ct.repair * dr),
+      tax: Math.round(ct.tax * dr),
+      other: Math.round(ct.other * dr)
+    });
+  }
+
+  // Adjust rounding - assign difference to largest mileage vehicle
+  var maxI = 0;
+  for (var i = 1; i < vehicles.length; i++) {
+    if (vehicles[i].totalKm > vehicles[maxI].totalKm) maxI = i;
+  }
+  var catKeys = ["fuel", "insurance", "repair", "tax", "other"];
+  for (var ci = 0; ci < catKeys.length; ci++) {
+    var cat = catKeys[ci];
+    var dist = 0;
+    for (var i = 0; i < results.length; i++) dist += results[i][cat];
+    results[maxI][cat] += ct[cat] - dist;
+  }
+
+  renderResults(results, ct);
+}
+
+function renderResults(results, ct) {
+  document.getElementById("resultSection").style.display = "";
+  var gt = ct.fuel + ct.insurance + ct.repair + ct.tax + ct.other;
+
+  document.getElementById("resultSummary").innerHTML =
+    '<div class="summary-item"><div class="value" style="color:var(--danger)">' + gt.toLocaleString() + '원</div><div class="lbl">차량관련 비용 합계</div></div>' +
+    '<div class="summary-item"><div class="value">' + ct.fuel.toLocaleString() + '원</div><div class="lbl"><span class="badge bf">유류비</span></div></div>' +
+    '<div class="summary-item"><div class="value">' + ct.insurance.toLocaleString() + '원</div><div class="lbl"><span class="badge bi">보험료</span></div></div>' +
+    '<div class="summary-item"><div class="value">' + ct.repair.toLocaleString() + '원</div><div class="lbl"><span class="badge br">수선비</span></div></div>' +
+    '<div class="summary-item"><div class="value">' + ct.tax.toLocaleString() + '원</div><div class="lbl"><span class="badge bt">자동차세</span></div></div>' +
+    '<div class="summary-item"><div class="value">' + ct.other.toLocaleString() + '원</div><div class="lbl"><span class="badge bo">기타비용</span></div></div>';
+
+  var h = '<thead><tr><th>No.</th><th>차량번호</th><th>차종</th><th>총주행거리</th><th>배분비율</th>' +
+    '<th style="background:#dbeafe">유류비(I)</th><th style="background:#fce7f3">보험료(J)</th>' +
+    '<th style="background:#fef3c7">수선비(K)</th><th style="background:#dcfce7">자동차세(L)</th>' +
+    '<th style="background:#f3e8ff">기타비용(M)</th><th style="background:var(--gray-200)">소계</th></tr></thead><tbody>';
+
+  var tots = {fuel:0, insurance:0, repair:0, tax:0, other:0, sub:0};
+  for (var i = 0; i < results.length; i++) {
+    var r = results[i];
+    var sub = r.fuel + r.insurance + r.repair + r.tax + r.other;
+    tots.fuel += r.fuel; tots.insurance += r.insurance; tots.repair += r.repair;
+    tots.tax += r.tax; tots.other += r.other; tots.sub += sub;
+    h += '<tr><td>' + r.no + '</td><td>' + (r.plate || "-") + '</td><td>' + (r.type || "-") + '</td>' +
+      '<td class="tr num">' + r.totalKm.toLocaleString() + '</td>' +
+      '<td class="num">' + (r.distRatio * 100).toFixed(4) + '%</td>' +
+      '<td class="tr num" style="background:#f0f7ff">' + r.fuel.toLocaleString() + '</td>' +
+      '<td class="tr num" style="background:#fdf2f8">' + r.insurance.toLocaleString() + '</td>' +
+      '<td class="tr num" style="background:#fffbeb">' + r.repair.toLocaleString() + '</td>' +
+      '<td class="tr num" style="background:#f0fdf4">' + r.tax.toLocaleString() + '</td>' +
+      '<td class="tr num" style="background:#faf5ff">' + r.other.toLocaleString() + '</td>' +
+      '<td class="tr num" style="font-weight:600">' + sub.toLocaleString() + '</td></tr>';
+  }
+  h += '<tr style="font-weight:700;background:var(--gray-100)"><td colspan="4">합계</td><td>-</td>' +
+    '<td class="tr num">' + tots.fuel.toLocaleString() + '</td>' +
+    '<td class="tr num">' + tots.insurance.toLocaleString() + '</td>' +
+    '<td class="tr num">' + tots.repair.toLocaleString() + '</td>' +
+    '<td class="tr num">' + tots.tax.toLocaleString() + '</td>' +
+    '<td class="tr num">' + tots.other.toLocaleString() + '</td>' +
+    '<td class="tr num">' + tots.sub.toLocaleString() + '</td></tr></tbody>';
+
+  document.getElementById("resultTable").innerHTML = h;
+  templateData.results = results;
+  document.getElementById("resultSection").scrollIntoView({behavior: "smooth"});
+}
+
+function downloadResult() {
+  if (!templateData || !templateData.results || !originalTemplateWb) {
+    alert("먼저 비용 배분 계산을 실행해주세요.");
+    return;
+  }
+  var wb = XLSX.read(XLSX.write(originalTemplateWb, {type:"array", bookType:"xlsx"}), {type:"array"});
+  var ws = wb.Sheets[wb.SheetNames[0]];
+
+  for (var i = 0; i < templateData.results.length; i++) {
+    var r = templateData.results[i];
+    var row = r.row;
+    ws[XLSX.utils.encode_cell({r:row, c:8})] = {t:"n", v:r.fuel, z:"#,##0"};
+    ws[XLSX.utils.encode_cell({r:row, c:9})] = {t:"n", v:r.insurance, z:"#,##0"};
+    ws[XLSX.utils.encode_cell({r:row, c:10})] = {t:"n", v:r.repair, z:"#,##0"};
+    ws[XLSX.utils.encode_cell({r:row, c:11})] = {t:"n", v:r.tax, z:"#,##0"};
+    ws[XLSX.utils.encode_cell({r:row, c:12})] = {t:"n", v:r.other, z:"#,##0"};
+  }
+
+  var range = XLSX.utils.decode_range(ws["!ref"]);
+  if (range.e.c < 12) range.e.c = 12;
+  ws["!ref"] = XLSX.utils.encode_range(range);
+
+  var wbOut = XLSX.write(wb, {bookType:"xlsx", type:"array"});
+  var blob = new Blob([wbOut], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  var now = new Date();
+  var ds = now.getFullYear() + String(now.getMonth()+1).padStart(2,"0") + String(now.getDate()).padStart(2,"0");
+  a.download = "업무용승용차_비용배분_결과_" + ds + ".xlsx";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
