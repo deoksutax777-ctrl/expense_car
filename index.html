@@ -906,6 +906,14 @@ function downloadResult() {
 
   ws2["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:R, c:10}});
   ws2["!cols"] = [{wch:8},{wch:14},{wch:10},{wch:14},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+  // Merge title rows so text doesn't get cut off
+  ws2["!merges"] = [
+    {s:{r:0,c:0}, e:{r:0,c:10}},
+    {s:{r:directDataStartR-2,c:0}, e:{r:directDataStartR-2,c:10}},
+    {s:{r:ratioDataStartR-2,c:0}, e:{r:ratioDataStartR-2,c:10}},
+    {s:{r:finalDataStartR-2,c:0}, e:{r:finalDataStartR-2,c:10}},
+    {s:{r:matchTitleR,c:0}, e:{r:matchTitleR,c:10}}
+  ];
   XLSX.utils.book_append_sheet(wb, ws2, "배분 상세내역");
 
   // ===============================================
@@ -1039,6 +1047,8 @@ function downloadResult() {
 
   ws3["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:R3, c:5}});
   ws3["!cols"] = [{wch:40},{wch:16},{wch:16},{wch:16},{wch:16},{wch:50}];
+  // Merge title row so text doesn't get cut off
+  ws3["!merges"] = [{s:{r:0,c:0}, e:{r:0,c:5}}];
   XLSX.utils.book_append_sheet(wb, ws3, "산출식 정리");
 
   // Append 거래처원장 as last sheet (back data)
@@ -1110,7 +1120,7 @@ function downloadResult() {
   for (var rli = 1; rli < RL; rli++) sty(wsL, rli, 7, rli%2===0?sAlt:sData);
   wsL['!views'] = [{showGridLines:false}];
 
-  // --- Sheet 1: 템플릿 (A,B열 숨김 + 눈금선 숨기기) ---
+  // --- Sheet 1: 템플릿 (A,B열 숨김 + 눈금선 숨기기 + 파란 테마) ---
   if (!ws['!cols']) ws['!cols'] = [];
   while (ws['!cols'].length < 2) ws['!cols'].push({});
   if (!ws['!cols'][0]) ws['!cols'][0] = {};
@@ -1118,6 +1128,24 @@ function downloadResult() {
   ws['!cols'][0].hidden = true;
   ws['!cols'][1].hidden = true;
   ws['!views'] = [{showGridLines:false}];
+  // Sheet 1 styling: title row 0, header row 2, data rows
+  var wsRange = XLSX.utils.decode_range(ws["!ref"]);
+  var wsMaxC = wsRange.e.c;
+  // Row 0: title
+  sty(ws, 0, wsMaxC, sTitle);
+  // Row 2: header
+  sty(ws, 2, wsMaxC, sHead);
+  // Data rows (3+)
+  for (var wri = 3; wri <= wsRange.e.r; wri++) {
+    sty(ws, wri, wsMaxC, wri%2===1?sData:sAlt);
+  }
+  // Number format for data cells I~N (cols 8~13)
+  for (var wri = 3; wri <= wsRange.e.r; wri++) {
+    for (var wci = 8; wci <= 13; wci++) {
+      var wRef = XLSX.utils.encode_cell({r:wri, c:wci});
+      if (ws[wRef]) ws[wRef].z = "#,##0";
+    }
+  }
 
   // --- Download ---
   var wbOut = XLSX.write(wb, {bookType:"xlsx", type:"array"});
