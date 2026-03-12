@@ -739,7 +739,8 @@ function downloadResult() {
     RL++;
   }
   wsL["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:RL, c:7}});
-  wsL["!cols"] = [{wch:12},{wch:30},{wch:20},{wch:14},{wch:10},{wch:10},{wch:14},{wch:14}];
+  // A:날짜, B:적요, C:거래처, D:금액, E:분류, F:배분구분, G:배분차량, H:원장시트
+  wsL["!cols"] = [{wch:10},{wch:32},{wch:22},{wch:14},{wch:10},{wch:10},{wch:12},{wch:22}];
 
   // ===============================================
   // Sheet 2: 배분 상세내역 (with Excel formulas)
@@ -905,7 +906,8 @@ function downloadResult() {
   R++;
 
   ws2["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:R, c:10}});
-  ws2["!cols"] = [{wch:8},{wch:14},{wch:10},{wch:14},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+  // A:No, B:차량번호, C:차종, D:유류비/총주행거리, E:보험료/배분비율, F:수선비, G:자동차세, H:기타비용, I:소계, J,K(여유)
+  ws2["!cols"] = [{wch:6},{wch:12},{wch:8},{wch:14},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
   // Merge title rows so text doesn't get cut off
   ws2["!merges"] = [
     {s:{r:0,c:0}, e:{r:0,c:10}},
@@ -1059,13 +1061,13 @@ function downloadResult() {
   // ===============================================
   var tB = {style:"thin", color:{rgb:"B8C9E0"}};
   var BD = {top:tB, bottom:tB, left:tB, right:tB};
-  var sTitle = {fill:{fgColor:{rgb:"1E3A5F"}}, font:{bold:true, color:{rgb:"FFFFFF"}, sz:12, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
-  var sHead = {fill:{fgColor:{rgb:"3B82F6"}}, font:{bold:true, color:{rgb:"FFFFFF"}, sz:11, name:"맑은 고딕"}, border:BD, alignment:{horizontal:"center", vertical:"center"}};
-  var sData = {font:{sz:11, color:{rgb:"1E293B"}, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
-  var sAlt = {fill:{fgColor:{rgb:"EFF6FF"}}, font:{sz:11, color:{rgb:"1E293B"}, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
-  var sSum = {fill:{fgColor:{rgb:"DBEAFE"}}, font:{bold:true, sz:11, color:{rgb:"1E3A5F"}, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
-  var sVehicle = {fill:{fgColor:{rgb:"1E40AF"}}, font:{bold:true, color:{rgb:"FFFFFF"}, sz:11, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
-  var sSubHead = {fill:{fgColor:{rgb:"93C5FD"}}, font:{bold:true, color:{rgb:"1E3A5F"}, sz:11, name:"맑은 고딕"}, border:BD, alignment:{horizontal:"center", vertical:"center"}};
+  var sTitle = {fill:{fgColor:{rgb:"1E3A5F"}}, font:{bold:true, color:{rgb:"FFFFFF"}, sz:11, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
+  var sHead = {fill:{fgColor:{rgb:"3B82F6"}}, font:{bold:true, color:{rgb:"FFFFFF"}, sz:10, name:"맑은 고딕"}, border:BD, alignment:{horizontal:"center", vertical:"center"}};
+  var sData = {font:{sz:10, color:{rgb:"1E293B"}, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
+  var sAlt = {fill:{fgColor:{rgb:"EFF6FF"}}, font:{sz:10, color:{rgb:"1E293B"}, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
+  var sSum = {fill:{fgColor:{rgb:"DBEAFE"}}, font:{bold:true, sz:10, color:{rgb:"1E3A5F"}, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
+  var sVehicle = {fill:{fgColor:{rgb:"1E40AF"}}, font:{bold:true, color:{rgb:"FFFFFF"}, sz:10, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
+  var sSubHead = {fill:{fgColor:{rgb:"93C5FD"}}, font:{bold:true, color:{rgb:"1E3A5F"}, sz:10, name:"맑은 고딕"}, border:BD, alignment:{horizontal:"center", vertical:"center"}};
 
   function sty(sheet, r, cEnd, style) {
     for (var c = 0; c <= cEnd; c++) {
@@ -1121,12 +1123,12 @@ function downloadResult() {
   wsL['!views'] = [{showGridLines:false}];
 
   // --- Sheet 1: 템플릿 (A,B열 숨김 + 눈금선 숨기기 + 파란 테마) ---
-  if (!ws['!cols']) ws['!cols'] = [];
-  while (ws['!cols'].length < 2) ws['!cols'].push({});
-  if (!ws['!cols'][0]) ws['!cols'][0] = {};
-  if (!ws['!cols'][1]) ws['!cols'][1] = {};
-  ws['!cols'][0].hidden = true;
-  ws['!cols'][1].hidden = true;
+  // A(hidden), B(hidden), C:No, D:차량번호, E:차종, F:총주행거리, G:업무용사용거리, H:업무운행비율, I:유류비, J:보험료, K:수선비, L:자동차세, M:기타비용, N(여유)
+  ws['!cols'] = [
+    {hidden:true}, {hidden:true},
+    {wch:6}, {wch:12}, {wch:8}, {wch:12}, {wch:14}, {wch:12},
+    {wch:14}, {wch:12}, {wch:14}, {wch:14}, {wch:14}
+  ];
   ws['!views'] = [{showGridLines:false}];
   // Sheet 1 styling: title row 0, header row 2, data rows
   var wsRange = XLSX.utils.decode_range(ws["!ref"]);
@@ -1146,6 +1148,9 @@ function downloadResult() {
       if (ws[wRef]) ws[wRef].z = "#,##0";
     }
   }
+  // Merge title row (row 0) across visible columns C~M
+  if (!ws['!merges']) ws['!merges'] = [];
+  ws['!merges'].push({s:{r:0,c:2}, e:{r:0,c:wsMaxC}});
 
   // --- Download ---
   var wbOut = XLSX.write(wb, {bookType:"xlsx", type:"array"});
