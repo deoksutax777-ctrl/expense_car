@@ -70,6 +70,11 @@
   .filter-bar select { padding:6px 12px; border:1px solid var(--gray-300); border-radius:4px; font-size:13px; }
   .info-box { background:var(--primary-light); border:1px solid #93c5fd; border-radius:6px; padding:12px 16px; font-size:13px; margin-bottom:16px; }
   .result-hl { background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:2px solid var(--success); }
+  .bv { background:#ecfdf5; color:#065f46; }
+  .vehicle-match { font-size:11px; color:#065f46; font-weight:600; }
+  .vehicle-sel { padding:4px 6px; border:1px solid var(--gray-300); border-radius:4px; font-size:11px; background:white; min-width:70px; }
+  .match-info { display:inline-block; padding:2px 6px; border-radius:4px; font-size:11px; background:#ecfdf5; color:#065f46; font-weight:600; border:1px solid #a7f3d0; }
+  .direct-cell { background:#ecfdf5 !important; }
   @media(max-width:768px) { .container{padding:12px;} .upload-area{flex-direction:column;} .summary-grid{grid-template-columns:repeat(2,1fr);} table{font-size:11px;} td,th{padding:4px;} }
 </style>
 </head>
@@ -77,7 +82,7 @@
 <div class="container">
   <header>
     <h1>업무용승용차 비용배분 프로그램</h1>
-    <p>거래처원장의 차량관련 비용을 총주행거리 비율로 각 차량에 배분합니다</p>
+    <p>거래처원장의 차량관련 비용을 차량번호 매칭 우선 배분 후, 나머지를 주행거리 비율로 배분합니다</p>
   </header>
 
   <div class="card">
@@ -110,7 +115,8 @@
     <h2><span class="step">3</span> 거래처원장 비용 분류</h2>
     <div class="info-box">
       거래처원장의 각 거래를 비용 항목(유류비/보험료/수선비/자동차세/기타비용)으로 자동 분류합니다.<br>
-      분류가 맞지 않는 항목은 드롭다운에서 직접 변경하세요. <strong>"제외"</strong>로 설정하면 배분 대상에서 빠집니다.
+      분류가 맞지 않는 항목은 드롭다운에서 직접 변경하세요. <strong>"제외"</strong>로 설정하면 배분 대상에서 빠집니다.<br>
+      <strong>차량번호 매칭:</strong> 적요/거래처에 차량번호가 포함된 비용은 해당 차량에 우선 배분되며, 매칭되지 않은 비용만 주행거리 비율로 배분됩니다.
     </div>
     <div class="tab-buttons" id="sheetTabs"></div>
     <div id="sheetContents"></div>
@@ -339,7 +345,7 @@ function renderSheet(sh, si) {
     '<label style="font-size:13px;display:flex;align-items:center;gap:4px;"><input type="checkbox" onchange="toggleSkip(' + si + ',this.checked)"> 제외 항목 숨기기</label>' +
     '</div><div class="tw"><table id="st-' + si + '"><thead><tr>' +
     '<th style="width:40px"><input type="checkbox" onchange="toggleAll(' + si + ',this.checked)"></th>' +
-    '<th>날짜</th><th>적요</th><th>거래처</th><th>차변(금액)</th><th>대변</th><th>분류</th></tr></thead><tbody>';
+    '<th>날짜</th><th>적요</th><th>거래처</th><th>차변(금액)</th><th>대변</th><th>분류</th><th>차량배분</th></tr></thead><tbody>';
 
   for (var ei = 0; ei < sh.entries.length; ei++) {
     var en = sh.entries[ei];
@@ -348,12 +354,22 @@ function renderSheet(sh, si) {
       var sel = keys[ki] === en.category ? " selected" : "";
       selOpts += '<option value="' + keys[ki] + '"' + sel + '>' + CATS[keys[ki]].name + '</option>';
     }
-    h += '<tr data-id="' + en.id + '" class="' + (en.category === "skip" ? "hl-row" : "") + '">' +
+    var vOpts = '<option value="">비율배분</option>';
+    if (templateData) {
+      for (var vi = 0; vi < templateData.vehicles.length; vi++) {
+        var vSel = en.matchedVehicle === vi ? " selected" : "";
+        vOpts += '<option value="' + vi + '"' + vSel + '>' + (templateData.vehicles[vi].plate || templateData.vehicles[vi].no) + '</option>';
+      }
+    }
+    var rowCls = en.category === "skip" ? "hl-row" : "";
+    h += '<tr data-id="' + en.id + '" class="' + rowCls + '">' +
       '<td><input type="checkbox" data-eid="' + en.id + '"></td>' +
       '<td>' + en.date + '</td><td class="tl">' + en.desc + '</td><td class="tl">' + en.vendor + '</td>' +
       '<td class="tr num">' + (en.debit ? en.debit.toLocaleString() : "") + '</td>' +
       '<td class="tr num">' + (en.credit ? en.credit.toLocaleString() : "") + '</td>' +
-      '<td><select class="cs" data-eid="' + en.id + '" onchange="chgCat(' + en.id + ',this.value)">' + selOpts + '</select></td></tr>';
+      '<td><select class="cs" data-eid="' + en.id + '" onchange="chgCat(' + en.id + ',this.value)">' + selOpts + '</select></td>' +
+      '<td><select class="vehicle-sel" data-veid="' + en.id + '" onchange="chgVehicle(' + en.id + ',this.value)">' + vOpts + '</select>' +
+      (en.matchedVehicle !== null && en.matchedVehicle !== undefined ? ' <span class="match-info">자동</span>' : '') + '</td></tr>';
   }
   h += '</tbody></table></div>';
   return h;
@@ -438,15 +454,22 @@ function updateCatSummary() {
   for (var ki = 0; ki < keys.length; ki++) {
     sm[keys[ki]] = {name: CATS[keys[ki]].name, bc: CATS[keys[ki]].bc, count: 0, total: 0};
   }
+  var matchedCount = 0, matchedTotal = 0;
   for (var i = 0; i < ledgerData.entries.length; i++) {
-    var cat = ledgerData.entries[i].category || "other";
-    if (sm[cat]) { sm[cat].count++; sm[cat].total += ledgerData.entries[i].amount; }
+    var en = ledgerData.entries[i];
+    var cat = en.category || "other";
+    if (sm[cat]) { sm[cat].count++; sm[cat].total += en.amount; }
+    if (en.matchedVehicle !== null && en.matchedVehicle !== undefined && cat !== "skip") {
+      matchedCount++;
+      matchedTotal += en.amount;
+    }
   }
   var h = '<div class="summary-grid">';
   for (var ki = 0; ki < keys.length; ki++) {
     var d = sm[keys[ki]];
     h += '<div class="summary-item"><div class="value" style="font-size:18px">' + d.total.toLocaleString() + '원</div><div class="lbl"><span class="badge ' + d.bc + '">' + d.name + '</span> ' + d.count + '건</div></div>';
   }
+  h += '<div class="summary-item" style="border-color:#a7f3d0"><div class="value" style="font-size:18px;color:#065f46">' + matchedTotal.toLocaleString() + '원</div><div class="lbl"><span class="badge bv">차량매칭</span> ' + matchedCount + '건 (직접배분)</div></div>';
   h += '</div>';
   var el = document.getElementById("catSummary");
   if (el) el.innerHTML = h;
@@ -455,7 +478,57 @@ function updateCatSummary() {
 function checkReady() {
   if (templateData && ledgerData) {
     document.getElementById("ledgerSection").style.display = "";
+    matchVehicles();
+    renderLedger();
   }
+}
+
+function matchVehicles() {
+  if (!templateData || !ledgerData) return;
+  var vehicles = templateData.vehicles;
+  var plates = [];
+  for (var i = 0; i < vehicles.length; i++) {
+    var p = String(vehicles[i].plate || "").replace(/\s/g, "");
+    plates.push(p);
+  }
+  for (var i = 0; i < ledgerData.entries.length; i++) {
+    var en = ledgerData.entries[i];
+    var text = ((en.desc || "") + " " + (en.vendor || "")).replace(/\s/g, "");
+    en.matchedVehicle = null;
+    for (var vi = 0; vi < plates.length; vi++) {
+      if (plates[vi] && text.indexOf(plates[vi]) >= 0) {
+        en.matchedVehicle = vi;
+        break;
+      }
+    }
+  }
+  // sync to sheets
+  for (var si = 0; si < ledgerData.sheets.length; si++) {
+    for (var ei = 0; ei < ledgerData.sheets[si].entries.length; ei++) {
+      var se = ledgerData.sheets[si].entries[ei];
+      for (var j = 0; j < ledgerData.entries.length; j++) {
+        if (ledgerData.entries[j].id === se.id) {
+          se.matchedVehicle = ledgerData.entries[j].matchedVehicle;
+          break;
+        }
+      }
+    }
+  }
+}
+
+function chgVehicle(eid, val) {
+  var mv = val === "" ? null : parseInt(val);
+  for (var i = 0; i < ledgerData.entries.length; i++) {
+    if (ledgerData.entries[i].id === eid) { ledgerData.entries[i].matchedVehicle = mv; break; }
+  }
+  for (var si = 0; si < ledgerData.sheets.length; si++) {
+    for (var ei = 0; ei < ledgerData.sheets[si].entries.length; ei++) {
+      if (ledgerData.sheets[si].entries[ei].id === eid) {
+        ledgerData.sheets[si].entries[ei].matchedVehicle = mv;
+      }
+    }
+  }
+  updateCatSummary();
 }
 
 function calcDist() {
@@ -465,51 +538,71 @@ function calcDist() {
   for (var i = 0; i < vehicles.length; i++) totalKmAll += vehicles[i].totalKm;
   if (totalKmAll === 0) { alert("총주행거리 합계가 0입니다."); return; }
 
-  var ct = {fuel:0, insurance:0, repair:0, tax:0, other:0};
+  var catKeys = ["fuel", "insurance", "repair", "tax", "other"];
+
+  // Step 1: Separate direct-allocated (matched) vs pool (unmatched) amounts per category
+  var direct = []; // per vehicle direct amounts
+  for (var i = 0; i < vehicles.length; i++) {
+    direct.push({fuel:0, insurance:0, repair:0, tax:0, other:0});
+  }
+  var pool = {fuel:0, insurance:0, repair:0, tax:0, other:0};
+  var ctAll = {fuel:0, insurance:0, repair:0, tax:0, other:0};
+
   for (var i = 0; i < ledgerData.entries.length; i++) {
     var en = ledgerData.entries[i];
-    if (en.category !== "skip" && ct.hasOwnProperty(en.category)) {
-      ct[en.category] += en.amount;
+    if (en.category === "skip" || !ctAll.hasOwnProperty(en.category)) continue;
+    ctAll[en.category] += en.amount;
+    if (en.matchedVehicle !== null && en.matchedVehicle !== undefined && en.matchedVehicle >= 0 && en.matchedVehicle < vehicles.length) {
+      direct[en.matchedVehicle][en.category] += en.amount;
+    } else {
+      pool[en.category] += en.amount;
     }
   }
 
+  // Step 2: Distribute pool amounts by mileage ratio, add direct amounts
   var results = [];
   for (var i = 0; i < vehicles.length; i++) {
     var v = vehicles[i];
     var dr = v.totalKm / totalKmAll;
-    results.push({
+    var r = {
       no: v.no, plate: v.plate, type: v.type, totalKm: v.totalKm,
       bizKm: v.bizKm, ratio: v.ratio, row: v.row, distRatio: dr,
-      fuel: Math.round(ct.fuel * dr),
-      insurance: Math.round(ct.insurance * dr),
-      repair: Math.round(ct.repair * dr),
-      tax: Math.round(ct.tax * dr),
-      other: Math.round(ct.other * dr)
-    });
+      fuel: direct[i].fuel + Math.round(pool.fuel * dr),
+      insurance: direct[i].insurance + Math.round(pool.insurance * dr),
+      repair: direct[i].repair + Math.round(pool.repair * dr),
+      tax: direct[i].tax + Math.round(pool.tax * dr),
+      other: direct[i].other + Math.round(pool.other * dr),
+      directFuel: direct[i].fuel, directInsurance: direct[i].insurance,
+      directRepair: direct[i].repair, directTax: direct[i].tax, directOther: direct[i].other
+    };
+    results.push(r);
   }
 
-  // Adjust rounding - assign difference to largest mileage vehicle
+  // Step 3: Adjust rounding - assign difference to largest mileage vehicle
   var maxI = 0;
   for (var i = 1; i < vehicles.length; i++) {
     if (vehicles[i].totalKm > vehicles[maxI].totalKm) maxI = i;
   }
-  var catKeys = ["fuel", "insurance", "repair", "tax", "other"];
   for (var ci = 0; ci < catKeys.length; ci++) {
     var cat = catKeys[ci];
     var dist = 0;
     for (var i = 0; i < results.length; i++) dist += results[i][cat];
-    results[maxI][cat] += ct[cat] - dist;
+    results[maxI][cat] += ctAll[cat] - dist;
   }
 
-  renderResults(results, ct);
+  renderResults(results, ctAll, pool, direct);
 }
 
-function renderResults(results, ct) {
+function renderResults(results, ct, pool, direct) {
   document.getElementById("resultSection").style.display = "";
   var gt = ct.fuel + ct.insurance + ct.repair + ct.tax + ct.other;
+  var poolTotal = pool.fuel + pool.insurance + pool.repair + pool.tax + pool.other;
+  var directTotal = gt - poolTotal;
 
   document.getElementById("resultSummary").innerHTML =
     '<div class="summary-item"><div class="value" style="color:var(--danger)">' + gt.toLocaleString() + '원</div><div class="lbl">차량관련 비용 합계</div></div>' +
+    '<div class="summary-item"><div class="value" style="color:#065f46">' + directTotal.toLocaleString() + '원</div><div class="lbl">차량번호 직접배분</div></div>' +
+    '<div class="summary-item"><div class="value" style="color:var(--primary)">' + poolTotal.toLocaleString() + '원</div><div class="lbl">주행거리 비율배분</div></div>' +
     '<div class="summary-item"><div class="value">' + ct.fuel.toLocaleString() + '원</div><div class="lbl"><span class="badge bf">유류비</span></div></div>' +
     '<div class="summary-item"><div class="value">' + ct.insurance.toLocaleString() + '원</div><div class="lbl"><span class="badge bi">보험료</span></div></div>' +
     '<div class="summary-item"><div class="value">' + ct.repair.toLocaleString() + '원</div><div class="lbl"><span class="badge br">수선비</span></div></div>' +
@@ -527,14 +620,23 @@ function renderResults(results, ct) {
     var sub = r.fuel + r.insurance + r.repair + r.tax + r.other;
     tots.fuel += r.fuel; tots.insurance += r.insurance; tots.repair += r.repair;
     tots.tax += r.tax; tots.other += r.other; tots.sub += sub;
+
+    var hasDirect = (r.directFuel || r.directInsurance || r.directRepair || r.directTax || r.directOther);
+    function fmtCell(total, directAmt, bgColor) {
+      if (directAmt > 0) {
+        return '<td class="tr num direct-cell" style="background:' + bgColor + '" title="직접배분: ' + directAmt.toLocaleString() + ' + 비율배분: ' + (total - directAmt).toLocaleString() + '">' + total.toLocaleString() + '<br><span style="font-size:10px;color:#065f46">(' + directAmt.toLocaleString() + ')</span></td>';
+      }
+      return '<td class="tr num" style="background:' + bgColor + '">' + total.toLocaleString() + '</td>';
+    }
+
     h += '<tr><td>' + r.no + '</td><td>' + (r.plate || "-") + '</td><td>' + (r.type || "-") + '</td>' +
       '<td class="tr num">' + r.totalKm.toLocaleString() + '</td>' +
       '<td class="num">' + (r.distRatio * 100).toFixed(4) + '%</td>' +
-      '<td class="tr num" style="background:#f0f7ff">' + r.fuel.toLocaleString() + '</td>' +
-      '<td class="tr num" style="background:#fdf2f8">' + r.insurance.toLocaleString() + '</td>' +
-      '<td class="tr num" style="background:#fffbeb">' + r.repair.toLocaleString() + '</td>' +
-      '<td class="tr num" style="background:#f0fdf4">' + r.tax.toLocaleString() + '</td>' +
-      '<td class="tr num" style="background:#faf5ff">' + r.other.toLocaleString() + '</td>' +
+      fmtCell(r.fuel, r.directFuel, '#f0f7ff') +
+      fmtCell(r.insurance, r.directInsurance, '#fdf2f8') +
+      fmtCell(r.repair, r.directRepair, '#fffbeb') +
+      fmtCell(r.tax, r.directTax, '#f0fdf4') +
+      fmtCell(r.other, r.directOther, '#faf5ff') +
       '<td class="tr num" style="font-weight:600">' + sub.toLocaleString() + '</td></tr>';
   }
   h += '<tr style="font-weight:700;background:var(--gray-100)"><td colspan="4">합계</td><td>-</td>' +
