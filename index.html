@@ -87,6 +87,64 @@
 
   <div class="card">
     <h2><span class="step">1</span> 파일 업로드</h2>
+    <div style="margin-bottom:16px;">
+      <button class="btn" onclick="toggleGuide()" style="background:var(--warning);color:white;font-size:13px;padding:7px 16px;">
+        &#128218; 투입물(계정별원장) 준비 가이드
+      </button>
+    </div>
+    <div id="inputGuide" style="display:none; margin-bottom:20px;">
+      <div style="background:#fffbeb; border:1px solid #fbbf24; border-radius:8px; padding:20px; font-size:13px; line-height:1.8;">
+        <h3 style="font-size:15px; font-weight:700; color:#92400e; margin-bottom:12px;">계정별원장 준비 안내</h3>
+        <p style="margin-bottom:12px; color:#78350f;">
+          회계프로그램(더존, 세무사랑 등)에서 <strong>차량관련 계정과목만 선택</strong>하여 계정별원장을 다운로드해 주세요.
+        </p>
+        <div style="background:white; border:1px solid #fde68a; border-radius:6px; padding:14px; margin-bottom:12px;">
+          <strong style="color:#92400e;">다운로드 대상 계정과목:</strong>
+          <table style="width:100%; margin-top:8px; font-size:13px; border-collapse:collapse;">
+            <tr style="background:#fef3c7;">
+              <th style="padding:6px 10px; text-align:left; border:1px solid #fde68a; width:160px;">계정과목</th>
+              <th style="padding:6px 10px; text-align:left; border:1px solid #fde68a;">포함 내용</th>
+            </tr>
+            <tr>
+              <td style="padding:6px 10px; border:1px solid #fde68a; font-weight:600;">세금과공과(금)</td>
+              <td style="padding:6px 10px; border:1px solid #fde68a;">자동차세, 환경개선부담금 등</td>
+            </tr>
+            <tr style="background:#fffef5;">
+              <td style="padding:6px 10px; border:1px solid #fde68a; font-weight:600;">보험료</td>
+              <td style="padding:6px 10px; border:1px solid #fde68a;">자동차보험, 책임보험 등</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 10px; border:1px solid #fde68a; font-weight:600;">차량유지비</td>
+              <td style="padding:6px 10px; border:1px solid #fde68a;">주유비, 통행료, 주차비, 하이패스 등</td>
+            </tr>
+            <tr style="background:#fffef5;">
+              <td style="padding:6px 10px; border:1px solid #fde68a; font-weight:600;">수선비</td>
+              <td style="padding:6px 10px; border:1px solid #fde68a;">정비, 타이어, 세차, 부품 교환 등</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 10px; border:1px solid #fde68a; font-weight:600;">임차료 (해당시)</td>
+              <td style="padding:6px 10px; border:1px solid #fde68a;">차량 리스료, 렌트료</td>
+            </tr>
+          </table>
+        </div>
+        <div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:6px; padding:14px; margin-bottom:12px;">
+          <strong style="color:#991b1b;">주의사항:</strong>
+          <ul style="margin:8px 0 0 18px; color:#7f1d1d;">
+            <li><strong>12월 31일자 손익대체 전표, 원가대체 전표</strong>가 포함되어 있어도 자동으로 제외됩니다.
+              <br><span style="font-size:12px; color:#991b1b;">적요에 "손익대체", "원가대체", "대체전표", "결산대체", "손익계정", "기말대체", "마감대체"가 포함된 전표는 자동 필터링됩니다.</span></li>
+            <li style="margin-top:6px;">차량과 무관한 비용(4대보험, 재산세, 주민세, 사무실 등)은 자동으로 <strong>"제외"</strong> 처리됩니다.</li>
+          </ul>
+        </div>
+        <div style="background:#ecfdf5; border:1px solid #6ee7b7; border-radius:6px; padding:14px;">
+          <strong style="color:#065f46;">파일 형식:</strong>
+          <ul style="margin:8px 0 0 18px; color:#064e3b;">
+            <li>엑셀 형식 (.xls 또는 .xlsx)</li>
+            <li>계정과목별로 시트가 분리된 형태 (시트명 = 계정과목명)</li>
+            <li>행 구성: 1~4행 헤더, 5행부터 데이터 (날짜/적요/코드/거래처/차변/대변)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
     <div class="upload-area">
       <div class="upload-box" id="templateBox">
         <input type="file" id="templateFile" accept=".xlsx,.xls" onchange="loadTemplate(this)">
@@ -137,6 +195,11 @@
 </div>
 
 <script>
+function toggleGuide() {
+  var g = document.getElementById("inputGuide");
+  g.style.display = g.style.display === "none" ? "block" : "none";
+}
+
 var templateData = null;
 var ledgerData = null;
 var originalTemplateWb = null;
@@ -263,8 +326,18 @@ function loadLedger(inp) {
           if (!desc || desc.indexOf("[ 월") >= 0 || desc.indexOf("[ 누") >= 0 || desc.indexOf("손익계정") >= 0) continue;
           if (deb === 0 && cred === 0) continue;
 
-          var vendor = vendC ? String(vendC.v || "").trim() : "";
+          // 12/31 손익대체·원가대체·결산대체 전표 자동 제외
           var date = dateC ? String(dateC.v || "").trim() : "";
+          var isYearEnd = /12[\.\-\/\s]*31/.test(date);
+          var TRANSFER_KW = ["손익대체","원가대체","대체전표","결산대체","기말대체","마감대체","결산정리","타계정대체"];
+          var isTransfer = false;
+          for (var tk = 0; tk < TRANSFER_KW.length; tk++) {
+            if (desc.indexOf(TRANSFER_KW[tk]) >= 0) { isTransfer = true; break; }
+          }
+          if (isTransfer) continue;
+          if (isYearEnd && (deb === cred || (desc.indexOf("대체") >= 0))) continue;
+
+          var vendor = vendC ? String(vendC.v || "").trim() : "";
           var category = catEntry(desc, vendor, sn);
 
           var entry = {id:eid++, date:date, desc:desc, code:codeC?String(codeC.v||""):"", vendor:vendor, debit:deb, credit:cred, amount:deb-cred, sheet:sn, category:category};
@@ -739,8 +812,7 @@ function downloadResult() {
     RL++;
   }
   wsL["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:RL, c:7}});
-  // A:날짜, B:적요, C:거래처, D:금액, E:분류, F:배분구분, G:배분차량, H:원장시트
-  wsL["!cols"] = [{wch:10},{wch:32},{wch:22},{wch:14},{wch:10},{wch:10},{wch:12},{wch:22}];
+  wsL["!cols"] = [{wch:10},{wch:34},{wch:22},{wch:14},{wch:12},{wch:12},{wch:14},{wch:24}];
 
   // ===============================================
   // Sheet 2: 배분 상세내역 (with Excel formulas)
@@ -906,8 +978,7 @@ function downloadResult() {
   R++;
 
   ws2["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:R, c:10}});
-  // A:No, B:차량번호, C:차종, D:유류비/총주행거리, E:보험료/배분비율, F:수선비, G:자동차세, H:기타비용, I:소계, J,K(여유)
-  ws2["!cols"] = [{wch:6},{wch:12},{wch:8},{wch:14},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+  ws2["!cols"] = [{wch:6},{wch:14},{wch:10},{wch:14},{wch:13},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
   // Merge title rows so text doesn't get cut off
   ws2["!merges"] = [
     {s:{r:0,c:0}, e:{r:0,c:10}},
@@ -1048,7 +1119,7 @@ function downloadResult() {
   sc(ws3, R3, 0, "  제외: 4대보험, 재산세, 부가세 등 차량과 무관한 비용"); R3++;
 
   ws3["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:R3, c:5}});
-  ws3["!cols"] = [{wch:40},{wch:16},{wch:16},{wch:16},{wch:16},{wch:50}];
+  ws3["!cols"] = [{wch:42},{wch:16},{wch:16},{wch:16},{wch:16},{wch:52}];
   // Merge title row so text doesn't get cut off
   ws3["!merges"] = [{s:{r:0,c:0}, e:{r:0,c:5}}];
   XLSX.utils.book_append_sheet(wb, ws3, "산출식 정리");
@@ -1057,18 +1128,119 @@ function downloadResult() {
   XLSX.utils.book_append_sheet(wb, wsL, "거래처원장");
 
   // ===============================================
-  // Apply Blue Theme Formatting & Styles
+  // Apply Premium Formatting & Styles
   // ===============================================
-  var tB = {style:"thin", color:{rgb:"B8C9E0"}};
-  var BD = {top:tB, bottom:tB, left:tB, right:tB};
-  var sTitle = {fill:{fgColor:{rgb:"1E3A5F"}}, font:{bold:true, color:{rgb:"FFFFFF"}, sz:11, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
-  var sHead = {fill:{fgColor:{rgb:"3B82F6"}}, font:{bold:true, color:{rgb:"FFFFFF"}, sz:10, name:"맑은 고딕"}, border:BD, alignment:{horizontal:"center", vertical:"center"}};
-  var sData = {font:{sz:10, color:{rgb:"1E293B"}, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
-  var sAlt = {fill:{fgColor:{rgb:"EFF6FF"}}, font:{sz:10, color:{rgb:"1E293B"}, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
-  var sSum = {fill:{fgColor:{rgb:"DBEAFE"}}, font:{bold:true, sz:10, color:{rgb:"1E3A5F"}, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
-  var sVehicle = {fill:{fgColor:{rgb:"1E40AF"}}, font:{bold:true, color:{rgb:"FFFFFF"}, sz:10, name:"맑은 고딕"}, border:BD, alignment:{vertical:"center"}};
-  var sSubHead = {fill:{fgColor:{rgb:"93C5FD"}}, font:{bold:true, color:{rgb:"1E3A5F"}, sz:10, name:"맑은 고딕"}, border:BD, alignment:{horizontal:"center", vertical:"center"}};
+  var FN = "맑은 고딕";
 
+  // Border definitions
+  var bThin = {style:"thin", color:{rgb:"D0D5DD"}};
+  var bMed  = {style:"medium", color:{rgb:"98A2B3"}};
+  var BD    = {top:bThin, bottom:bThin, left:bThin, right:bThin};
+  var BDbot = {top:bThin, bottom:bMed, left:bThin, right:bThin};
+  var BDnone = {};
+
+  // --- Style definitions ---
+  // Section title: dark navy gradient-like
+  var sTitle = {
+    fill:{fgColor:{rgb:"0F1D3A"}},
+    font:{bold:true, color:{rgb:"FFFFFF"}, sz:13, name:FN},
+    border:BDnone,
+    alignment:{vertical:"center", horizontal:"left", indent:1}
+  };
+  // Column header: medium blue with white text
+  var sHead = {
+    fill:{fgColor:{rgb:"2563EB"}},
+    font:{bold:true, color:{rgb:"FFFFFF"}, sz:10, name:FN},
+    border:{top:bMed, bottom:bMed, left:bThin, right:bThin},
+    alignment:{horizontal:"center", vertical:"center", wrapText:true}
+  };
+  // Data row (white)
+  var sData = {
+    fill:{fgColor:{rgb:"FFFFFF"}},
+    font:{sz:10, color:{rgb:"344054"}, name:FN},
+    border:BD,
+    alignment:{vertical:"center"}
+  };
+  // Alternate data row (very light blue-gray)
+  var sAlt = {
+    fill:{fgColor:{rgb:"F0F4FA"}},
+    font:{sz:10, color:{rgb:"344054"}, name:FN},
+    border:BD,
+    alignment:{vertical:"center"}
+  };
+  // Sum/total row: light blue with bold navy text + bottom medium border
+  var sSum = {
+    fill:{fgColor:{rgb:"D4E4FC"}},
+    font:{bold:true, sz:10, color:{rgb:"0F1D3A"}, name:FN},
+    border:BDbot,
+    alignment:{vertical:"center"}
+  };
+  // Vehicle name row (Sheet 3): dark blue accent
+  var sVehicle = {
+    fill:{fgColor:{rgb:"1D4ED8"}},
+    font:{bold:true, color:{rgb:"FFFFFF"}, sz:11, name:FN},
+    border:BDnone,
+    alignment:{vertical:"center", indent:1}
+  };
+  // Sub-header (Sheet 3 계정과목 rows): medium blue
+  var sSubHead = {
+    fill:{fgColor:{rgb:"93B4F6"}},
+    font:{bold:true, color:{rgb:"1E293B"}, sz:10, name:FN},
+    border:BD,
+    alignment:{horizontal:"center", vertical:"center"}
+  };
+  // Number-aligned data (right-aligned with comma format)
+  var sDataNum = {
+    fill:{fgColor:{rgb:"FFFFFF"}},
+    font:{sz:10, color:{rgb:"344054"}, name:FN},
+    border:BD,
+    alignment:{vertical:"center", horizontal:"right"}
+  };
+  var sAltNum = {
+    fill:{fgColor:{rgb:"F0F4FA"}},
+    font:{sz:10, color:{rgb:"344054"}, name:FN},
+    border:BD,
+    alignment:{vertical:"center", horizontal:"right"}
+  };
+  var sSumNum = {
+    fill:{fgColor:{rgb:"D4E4FC"}},
+    font:{bold:true, sz:10, color:{rgb:"0F1D3A"}, name:FN},
+    border:BDbot,
+    alignment:{vertical:"center", horizontal:"right"}
+  };
+  // Label column in data rows (left-aligned, slightly indented)
+  var sDataLabel = {
+    fill:{fgColor:{rgb:"FFFFFF"}},
+    font:{sz:10, color:{rgb:"344054"}, name:FN},
+    border:BD,
+    alignment:{vertical:"center", horizontal:"left", indent:1}
+  };
+  var sAltLabel = {
+    fill:{fgColor:{rgb:"F0F4FA"}},
+    font:{sz:10, color:{rgb:"344054"}, name:FN},
+    border:BD,
+    alignment:{vertical:"center", horizontal:"left", indent:1}
+  };
+  var sSumLabel = {
+    fill:{fgColor:{rgb:"D4E4FC"}},
+    font:{bold:true, sz:10, color:{rgb:"0F1D3A"}, name:FN},
+    border:BDbot,
+    alignment:{vertical:"center", horizontal:"left", indent:1}
+  };
+  // Sheet 3 body text (no border, clean look)
+  var sBody = {
+    font:{sz:10, color:{rgb:"344054"}, name:FN},
+    border:BDnone,
+    alignment:{vertical:"center", wrapText:true}
+  };
+  var sBodyAlt = {
+    fill:{fgColor:{rgb:"F8FAFC"}},
+    font:{sz:10, color:{rgb:"344054"}, name:FN},
+    border:BDnone,
+    alignment:{vertical:"center", wrapText:true}
+  };
+
+  // Helper: apply style to a row range
   function sty(sheet, r, cEnd, style) {
     for (var c = 0; c <= cEnd; c++) {
       var ref = XLSX.utils.encode_cell({r:r, c:c});
@@ -1076,78 +1248,134 @@ function downloadResult() {
       sheet[ref].s = style;
     }
   }
+  // Helper: apply style per-cell with number columns right-aligned
+  function styRow(sheet, r, cEnd, baseLbl, baseNum, numStart) {
+    for (var c = 0; c <= cEnd; c++) {
+      var ref = XLSX.utils.encode_cell({r:r, c:c});
+      if (!sheet[ref]) sheet[ref] = {v:"", t:"s"};
+      sheet[ref].s = (c >= numStart) ? baseNum : baseLbl;
+      // Apply number format to numeric cells
+      if (c >= numStart && sheet[ref].t === "n") sheet[ref].z = "#,##0";
+    }
+  }
 
   // --- Sheet 2: 배분 상세내역 ---
+  // Row heights for readability
+  var ws2Rows = [];
   // Section 1: 비용 총괄 요약
   sty(ws2, 0, 10, sTitle);
+  ws2Rows[0] = {hpt:28};
   sty(ws2, 1, 6, sHead);
-  sty(ws2, summaryTotalR, 6, sData);
-  sty(ws2, summaryDirectR, 6, sAlt);
-  sty(ws2, summaryPoolR, 6, sSum);
+  ws2Rows[1] = {hpt:22};
+  styRow(ws2, summaryTotalR, 6, sDataLabel, sDataNum, 1);
+  styRow(ws2, summaryDirectR, 6, sAltLabel, sAltNum, 1);
+  styRow(ws2, summaryPoolR, 6, sSumLabel, sSumNum, 1);
   // Section 2: 차량번호 우선배분
   sty(ws2, directDataStartR-2, 10, sTitle);
+  ws2Rows[directDataStartR-2] = {hpt:28};
   sty(ws2, directDataStartR-1, 8, sHead);
-  for (var vi = 0; vi < N; vi++) sty(ws2, directDataStartR+vi, 8, vi%2===0?sData:sAlt);
-  sty(ws2, directSumR, 8, sSum);
+  ws2Rows[directDataStartR-1] = {hpt:22};
+  for (var vi = 0; vi < N; vi++) {
+    var isAlt = vi%2!==0;
+    styRow(ws2, directDataStartR+vi, 8, isAlt?sAltLabel:sDataLabel, isAlt?sAltNum:sDataNum, 3);
+  }
+  styRow(ws2, directSumR, 8, sSumLabel, sSumNum, 3);
   // Section 3: 비율배분
   sty(ws2, ratioDataStartR-2, 10, sTitle);
+  ws2Rows[ratioDataStartR-2] = {hpt:28};
   sty(ws2, ratioDataStartR-1, 10, sHead);
-  for (var vi = 0; vi < N; vi++) sty(ws2, ratioDataStartR+vi, 10, vi%2===0?sData:sAlt);
-  sty(ws2, ratioSumR, 10, sSum);
+  ws2Rows[ratioDataStartR-1] = {hpt:22};
+  for (var vi = 0; vi < N; vi++) {
+    var isAlt = vi%2!==0;
+    styRow(ws2, ratioDataStartR+vi, 10, isAlt?sAltLabel:sDataLabel, isAlt?sAltNum:sDataNum, 3);
+  }
+  styRow(ws2, ratioSumR, 10, sSumLabel, sSumNum, 3);
   // Section 4: 최종 결과
   sty(ws2, finalDataStartR-2, 10, sTitle);
+  ws2Rows[finalDataStartR-2] = {hpt:28};
   sty(ws2, finalDataStartR-1, 10, sHead);
-  for (var vi = 0; vi < N; vi++) sty(ws2, finalDataStartR+vi, 10, vi%2===0?sData:sAlt);
-  sty(ws2, finalSumR, 10, sSum);
+  ws2Rows[finalDataStartR-1] = {hpt:22};
+  for (var vi = 0; vi < N; vi++) {
+    var isAlt = vi%2!==0;
+    styRow(ws2, finalDataStartR+vi, 10, isAlt?sAltLabel:sDataLabel, isAlt?sAltNum:sDataNum, 3);
+  }
+  styRow(ws2, finalSumR, 10, sSumLabel, sSumNum, 3);
   // Section 5: 매칭 거래 목록
   sty(ws2, matchTitleR, 10, sTitle);
+  ws2Rows[matchTitleR] = {hpt:28};
   sty(ws2, matchHeaderR, 5, sHead);
-  for (var mi = matchDataStartR; mi <= matchDataEndR; mi++) sty(ws2, mi, 5, (mi-matchDataStartR)%2===0?sData:sAlt);
+  ws2Rows[matchHeaderR] = {hpt:22};
+  for (var mi = matchDataStartR; mi <= matchDataEndR; mi++) {
+    var isAlt = (mi-matchDataStartR)%2!==0;
+    styRow(ws2, mi, 5, isAlt?sAltLabel:sDataLabel, isAlt?sAltNum:sDataNum, 3);
+  }
+  ws2['!rows'] = ws2Rows;
   ws2['!views'] = [{showGridLines:false}];
 
   // --- Sheet 3: 산출식 정리 ---
+  var ws3Rows = [];
   for (var r3i = 0; r3i <= R3; r3i++) {
     var ref3 = XLSX.utils.encode_cell({r:r3i, c:0});
     var c3 = ws3[ref3]; var v3 = c3 ? String(c3.v||"") : "";
-    if (v3.indexOf("[") === 0) sty(ws3, r3i, 5, sTitle);
-    else if (/^\d+\.\s/.test(v3)) sty(ws3, r3i, 5, sHead);
-    else if (v3.indexOf("■") >= 0) sty(ws3, r3i, 5, sVehicle);
-    else if (v3.indexOf("계정과목") >= 0) sty(ws3, r3i, 5, sSubHead);
-    else if (v3) sty(ws3, r3i, 5, r3i%2===0?sData:sAlt);
+    if (v3.indexOf("[") === 0) {
+      sty(ws3, r3i, 5, sTitle);
+      ws3Rows[r3i] = {hpt:30};
+    } else if (/^\d+\.\s/.test(v3)) {
+      sty(ws3, r3i, 5, sVehicle);
+      ws3Rows[r3i] = {hpt:24};
+    } else if (v3.indexOf("■") >= 0) {
+      sty(ws3, r3i, 5, sVehicle);
+      ws3Rows[r3i] = {hpt:24};
+    } else if (v3.indexOf("계정과목") >= 0) {
+      sty(ws3, r3i, 5, sSubHead);
+      ws3Rows[r3i] = {hpt:20};
+    } else if (v3) {
+      sty(ws3, r3i, 5, r3i%2===0?sBody:sBodyAlt);
+    }
   }
+  ws3['!rows'] = ws3Rows;
   ws3['!views'] = [{showGridLines:false}];
 
   // --- Sheet 4: 거래처원장 ---
+  var wsLRows = [];
   sty(wsL, 0, 7, sHead);
-  for (var rli = 1; rli < RL; rli++) sty(wsL, rli, 7, rli%2===0?sAlt:sData);
+  wsLRows[0] = {hpt:24};
+  for (var rli = 1; rli < RL; rli++) {
+    var isAlt = rli%2===0;
+    styRow(wsL, rli, 7, isAlt?sAltLabel:sDataLabel, isAlt?sAltNum:sDataNum, 3);
+  }
+  wsL['!rows'] = wsLRows;
   wsL['!views'] = [{showGridLines:false}];
 
-  // --- Sheet 1: 템플릿 (A,B열 숨김 + 눈금선 숨기기 + 파란 테마) ---
-  // A(hidden), B(hidden), C:No, D:차량번호, E:차종, F:총주행거리, G:업무용사용거리, H:업무운행비율, I:유류비, J:보험료, K:수선비, L:자동차세, M:기타비용, N(여유)
+  // --- Sheet 1: 템플릿 (A,B열 숨김 + 눈금선 숨기기 + 프리미엄 테마) ---
   ws['!cols'] = [
     {hidden:true}, {hidden:true},
-    {wch:6}, {wch:12}, {wch:8}, {wch:12}, {wch:14}, {wch:12},
+    {wch:6}, {wch:14}, {wch:10}, {wch:14}, {wch:16}, {wch:14},
     {wch:14}, {wch:12}, {wch:14}, {wch:14}, {wch:14}
   ];
   ws['!views'] = [{showGridLines:false}];
-  // Sheet 1 styling: title row 0, header row 2, data rows
   var wsRange = XLSX.utils.decode_range(ws["!ref"]);
   var wsMaxC = wsRange.e.c;
+  var wsRows = [];
   // Row 0: title
   sty(ws, 0, wsMaxC, sTitle);
+  wsRows[0] = {hpt:32};
   // Row 2: header
   sty(ws, 2, wsMaxC, sHead);
-  // Data rows (3+)
+  wsRows[2] = {hpt:24};
+  // Data rows (3+): text columns left, number columns right
   for (var wri = 3; wri <= wsRange.e.r; wri++) {
-    sty(ws, wri, wsMaxC, wri%2===1?sData:sAlt);
+    var isAlt = wri%2===0;
+    styRow(ws, wri, wsMaxC, isAlt?sAltLabel:sDataLabel, isAlt?sAltNum:sDataNum, 5);
   }
-  // Number format for data cells I~N (cols 8~13)
+  // Number format for data cells I~M (cols 8~12)
   for (var wri = 3; wri <= wsRange.e.r; wri++) {
-    for (var wci = 8; wci <= 13; wci++) {
+    for (var wci = 8; wci <= 12; wci++) {
       var wRef = XLSX.utils.encode_cell({r:wri, c:wci});
       if (ws[wRef]) ws[wRef].z = "#,##0";
     }
   }
+  ws['!rows'] = wsRows;
   // Merge title row (row 0) across visible columns C~M
   if (!ws['!merges']) ws['!merges'] = [];
   ws['!merges'].push({s:{r:0,c:2}, e:{r:0,c:wsMaxC}});
