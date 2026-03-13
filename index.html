@@ -87,6 +87,64 @@
 
   <div class="card">
     <h2><span class="step">1</span> 파일 업로드</h2>
+    <div style="margin-bottom:16px;">
+      <button class="btn" onclick="toggleGuide()" style="background:var(--warning);color:white;font-size:13px;padding:7px 16px;">
+        &#128218; 투입물(계정별원장) 준비 가이드
+      </button>
+    </div>
+    <div id="inputGuide" style="display:none; margin-bottom:20px;">
+      <div style="background:#fffbeb; border:1px solid #fbbf24; border-radius:8px; padding:20px; font-size:13px; line-height:1.8;">
+        <h3 style="font-size:15px; font-weight:700; color:#92400e; margin-bottom:12px;">계정별원장 준비 안내</h3>
+        <p style="margin-bottom:12px; color:#78350f;">
+          회계프로그램(더존, 세무사랑 등)에서 <strong>차량관련 계정과목만 선택</strong>하여 계정별원장을 다운로드해 주세요.
+        </p>
+        <div style="background:white; border:1px solid #fde68a; border-radius:6px; padding:14px; margin-bottom:12px;">
+          <strong style="color:#92400e;">다운로드 대상 계정과목:</strong>
+          <table style="width:100%; margin-top:8px; font-size:13px; border-collapse:collapse;">
+            <tr style="background:#fef3c7;">
+              <th style="padding:6px 10px; text-align:left; border:1px solid #fde68a; width:160px;">계정과목</th>
+              <th style="padding:6px 10px; text-align:left; border:1px solid #fde68a;">포함 내용</th>
+            </tr>
+            <tr>
+              <td style="padding:6px 10px; border:1px solid #fde68a; font-weight:600;">세금과공과(금)</td>
+              <td style="padding:6px 10px; border:1px solid #fde68a;">자동차세, 환경개선부담금 등</td>
+            </tr>
+            <tr style="background:#fffef5;">
+              <td style="padding:6px 10px; border:1px solid #fde68a; font-weight:600;">보험료</td>
+              <td style="padding:6px 10px; border:1px solid #fde68a;">자동차보험, 책임보험 등</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 10px; border:1px solid #fde68a; font-weight:600;">차량유지비</td>
+              <td style="padding:6px 10px; border:1px solid #fde68a;">주유비, 통행료, 주차비, 하이패스 등</td>
+            </tr>
+            <tr style="background:#fffef5;">
+              <td style="padding:6px 10px; border:1px solid #fde68a; font-weight:600;">수선비</td>
+              <td style="padding:6px 10px; border:1px solid #fde68a;">정비, 타이어, 세차, 부품 교환 등</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 10px; border:1px solid #fde68a; font-weight:600;">임차료 (해당시)</td>
+              <td style="padding:6px 10px; border:1px solid #fde68a;">차량 리스료, 렌트료</td>
+            </tr>
+          </table>
+        </div>
+        <div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:6px; padding:14px; margin-bottom:12px;">
+          <strong style="color:#991b1b;">주의사항:</strong>
+          <ul style="margin:8px 0 0 18px; color:#7f1d1d;">
+            <li><strong>12월 31일자 손익대체 전표, 원가대체 전표</strong>가 포함되어 있어도 자동으로 제외됩니다.
+              <br><span style="font-size:12px; color:#991b1b;">적요에 "손익대체", "원가대체", "대체전표", "결산대체", "손익계정", "기말대체", "마감대체"가 포함된 전표는 자동 필터링됩니다.</span></li>
+            <li style="margin-top:6px;">차량과 무관한 비용(4대보험, 재산세, 주민세, 사무실 등)은 자동으로 <strong>"제외"</strong> 처리됩니다.</li>
+          </ul>
+        </div>
+        <div style="background:#ecfdf5; border:1px solid #6ee7b7; border-radius:6px; padding:14px;">
+          <strong style="color:#065f46;">파일 형식:</strong>
+          <ul style="margin:8px 0 0 18px; color:#064e3b;">
+            <li>엑셀 형식 (.xls 또는 .xlsx)</li>
+            <li>계정과목별로 시트가 분리된 형태 (시트명 = 계정과목명)</li>
+            <li>행 구성: 1~4행 헤더, 5행부터 데이터 (날짜/적요/코드/거래처/차변/대변)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
     <div class="upload-area">
       <div class="upload-box" id="templateBox">
         <input type="file" id="templateFile" accept=".xlsx,.xls" onchange="loadTemplate(this)">
@@ -137,6 +195,11 @@
 </div>
 
 <script>
+function toggleGuide() {
+  var g = document.getElementById("inputGuide");
+  g.style.display = g.style.display === "none" ? "block" : "none";
+}
+
 var templateData = null;
 var ledgerData = null;
 var originalTemplateWb = null;
@@ -263,8 +326,18 @@ function loadLedger(inp) {
           if (!desc || desc.indexOf("[ 월") >= 0 || desc.indexOf("[ 누") >= 0 || desc.indexOf("손익계정") >= 0) continue;
           if (deb === 0 && cred === 0) continue;
 
-          var vendor = vendC ? String(vendC.v || "").trim() : "";
+          // 12/31 손익대체·원가대체·결산대체 전표 자동 제외
           var date = dateC ? String(dateC.v || "").trim() : "";
+          var isYearEnd = /12[\.\-\/\s]*31/.test(date);
+          var TRANSFER_KW = ["손익대체","원가대체","대체전표","결산대체","기말대체","마감대체","결산정리","타계정대체"];
+          var isTransfer = false;
+          for (var tk = 0; tk < TRANSFER_KW.length; tk++) {
+            if (desc.indexOf(TRANSFER_KW[tk]) >= 0) { isTransfer = true; break; }
+          }
+          if (isTransfer) continue;
+          if (isYearEnd && (deb === cred || (desc.indexOf("대체") >= 0))) continue;
+
+          var vendor = vendC ? String(vendC.v || "").trim() : "";
           var category = catEntry(desc, vendor, sn);
 
           var entry = {id:eid++, date:date, desc:desc, code:codeC?String(codeC.v||""):"", vendor:vendor, debit:deb, credit:cred, amount:deb-cred, sheet:sn, category:category};
